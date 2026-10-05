@@ -85,6 +85,30 @@ places:
 - `permission` — whether the shell may run `git` at all.
 - `credentials` — what the token allows (author: push `feat/*` only; reviewer: push `main`).
 
+## Role base policies
+
+Built-in defaults (overridable per repo, **except** merge rights — reviewer-only, see
+[ADR 0006](adr/0006-role-privileges-are-data.md)):
+
+| Permission | author | reviewer |
+| ---------- | ------ | -------- |
+| `read` / `glob` / `grep` / `list` | allow | allow |
+| `edit` / `write` / `apply_patch` | allow | **deny** |
+| `bash` | `"*": ask`; allow `git commit *`, `git push origin feat/*`, test/build commands | `"*": ask`; allow test/build commands, `git merge`, `git push origin main` |
+| `task` (subagents) | deny | deny |
+| `webfetch` / `websearch` | deny unless granted | deny unless granted |
+| `external_directory` | deny | deny |
+| board reads (`kanban_get_*`, `kanban_list_*`) | allow | allow |
+| board writes (`kanban_move_task`, `kanban_update_task`, create/delete) | **deny** | **deny** |
+
+Credential scope (enforced by the broker — see [credentials.md](credentials.md)):
+
+- **author** — push `feat/*` only; no push to `main`; no branch delete.
+- **reviewer** — push `main` (merge); delete feature branches; no push to other branches.
+
+`permission` gates whether the shell may run `git`; the token gates *what* the push is
+allowed to touch. Both are needed — neither alone enforces the role.
+
 ## Tradeoffs
 
 - **Repo manifest vs per-task grants** — the manifest is DRY and reviewable but coarse;
