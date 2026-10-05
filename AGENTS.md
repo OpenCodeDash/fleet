@@ -19,6 +19,7 @@ or written down is lost at teardown.
 | Streaming / logging / audit that must survive teardown | `./docs/observability.md` |
 | How a container gets secrets / token scopes | `./docs/credentials.md` |
 | Container networking / egress allowlist | `./docs/egress.md` |
+| Concurrency / provider rate limits across the fleet | `./docs/limiters.md` |
 | Recording or changing a design decision | `./docs/adr/README.md` |
 | Dev shell / build / check / test | `./docs/commands.md` |
 
