@@ -24,3 +24,4 @@ One file per non-obvious design decision. Read this index, then the specific ADR
 | [`0006-role-privileges-are-data.md`](0006-role-privileges-are-data.md) | Role policies are data; merge to `main` is reviewer-only | accepted | #88 |
 | [`0007-per-container-scoped-tokens.md`](0007-per-container-scoped-tokens.md) | Per-container short-lived scoped tokens; broker separate from compiler | accepted | #90 |
 | [`0008-egress-default-deny.md`](0008-egress-default-deny.md) | Egress is default-deny, enforced by a proxy allowlist | accepted | #91 |
+| [`0009-bounded-review-iterations.md`](0009-bounded-review-iterations.md) | Review iterations are bounded (default 3); escalate to `Need Help` | accepted | #92 |

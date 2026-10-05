@@ -31,11 +31,11 @@ A value that would loosen a floor is rejected at startup, not silently clamps.
 | `egress.mode` | `deny` | default-deny; `allow` is a floor violation | [egress.md](egress.md) |
 | `egress.allow` | `[]` | extra allowlist hosts (on top of orchestrator + granted MCPs) | [egress.md](egress.md) |
 | `egress.proxy` | required | HTTP(S) proxy that enforces the allowlist | [egress.md](egress.md) |
-| `review.maxRounds` | `3` | review iterations before `Need Help` | [failure.md](failure.md) |
-| `provision.retries` | `2` | provision attempts before `Need Help` | [failure.md](failure.md) |
-| `verify.retries` | `2` | handoff re-validations before `Need Help` | [failure.md](failure.md) |
-| `run.idleTimeout` | `10m` | no-event window before nudge, then abort | [failure.md](failure.md) |
-| `task.budget` | `60m` | wall-clock cap per task | [failure.md](failure.md) |
+| `review.maxRounds` | `3` | review iterations before `Need Help` | [handoff.md](handoff.md#iteration-bound) |
+| `provision.retries` | `2` | provision attempts before `Need Help` | [orchestrator.md](orchestrator.md#timeouts-retries-escalation) |
+| `verify.retries` | `2` | handoff re-validations before `Need Help` | [orchestrator.md](orchestrator.md#timeouts-retries-escalation) |
+| `run.idleTimeout` | `10m` | no-event window before nudge, then abort | [orchestrator.md](orchestrator.md#timeouts-retries-escalation) |
+| `task.budget` | `60m` | wall-clock cap per task | [orchestrator.md](orchestrator.md#timeouts-retries-escalation) |
 | `limits.maxContainers` | `10` | concurrent containers | [limiters.md](limiters.md) |
 | `limits.providerConcurrency` | `4` | concurrent LLM calls per provider | [limiters.md](limiters.md) |
 | `limits.mcpConcurrency` | `5` | concurrent calls per MCP endpoint | [limiters.md](limiters.md) |

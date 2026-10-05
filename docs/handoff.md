@@ -70,7 +70,16 @@ The author instance is gone, so the fix is a **new container** resuming from dur
 - inject the reviewer's note + PR comments + acceptance criteria into the prompt;
 - fix, push, return a new `head_sha`; the orchestrator moves back to `Code Review`.
 
-Iterations are bounded; after N rounds escalate to `Need Help`.
+### Iteration bound
+
+`review.maxRounds` (default `3` — see [configuration.md](configuration.md)) caps
+author↔reviewer rounds per task. Each `changes` verdict increments a counter stored on the
+durable task record (board + audit), **not** in any container. When the bound is reached the
+orchestrator moves the task to `Need Help` instead of provisioning another author container.
+
+- One round = reviewer `changes` → new author container → reviewer verdict.
+- The counter survives teardown and orchestrator restarts (it is task state, not container
+  state).
 
 ## Reviewer checklist (hard criteria)
 
