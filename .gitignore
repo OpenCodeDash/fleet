@@ -1,0 +1,13 @@
+# nix
+result
+result-*
+.direnv/
+
+# node
+node_modules/
+dist/
+*.log
+
+# local secrets / state
+.env
+*.local
