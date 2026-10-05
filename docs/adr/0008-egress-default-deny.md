@@ -22,7 +22,7 @@ non-overridable floor violation.
   coupled.
 - Revoking a capability removes both its tools and its network path.
 - The proxy becomes a single point to observe egress; per-container connection logs feed
-  [observability](observability.md).
+  [observability](../observability.md).
 - Tasks whose model provider is not allowlisted fail closed rather than reach out silently.
 
 ## Alternatives rejected

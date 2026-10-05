@@ -20,7 +20,7 @@ egress proxy, which enforces the shared limits. Defaults: `maxContainers 10`,
 - No single agent can saturate a provider; 429 storms are avoided by smoothing centrally.
 - Admission is a queue, so tasks can wait — that wait counts against `task.budget`.
 - The egress proxy doubles as the enforcement and observation point (see
-  [ADR 0008](0008-egress-default-deny.md), [observability](observability.md)).
+  [ADR 0008](0008-egress-default-deny.md), [observability](../observability.md)).
 - Limiter state is control-plane state, independent of any container lifecycle.
 
 ## Alternatives rejected
