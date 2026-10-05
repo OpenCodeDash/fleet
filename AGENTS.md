@@ -12,6 +12,7 @@ or written down is lost at teardown.
 | You are working on… | Read |
 | ------------------- | ---- |
 | System structure, control/data plane, contracts, role handoff | `./docs/architecture.md` |
+| A task's tools / MCPs / permissions (capability set) | `./docs/capability-compiler.md` |
 | Recording or changing a design decision | `./docs/adr/README.md` |
 | Dev shell / build / check / test | `./docs/commands.md` |
 

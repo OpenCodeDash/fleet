@@ -29,7 +29,7 @@ Surviving state = git branches + board + streamed events. Nothing else.
 - **Capability compiler** — `(task, role) -> { mcp set, permission tree, credentials }`.
   Deterministic + hashable for audit. Uses `permission` (not the deprecated `tools` map),
   default-deny with wildcard allowlists; MCP tools are prefixed by server name
-  (`"kanban_*"` gates a server's tools).
+  (`"kanban_*"` gates a server's tools). Full spec: [`capability-compiler.md`](capability-compiler.md).
 - **Event sink** — `.ephemeral` does not link the container journal to the host, so
   in-container logs vanish on teardown. The orchestrator MUST continuously stream `/event`
   + stderr to durable storage, or all forensics are lost.

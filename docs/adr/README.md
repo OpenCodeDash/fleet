@@ -17,3 +17,4 @@ One file per non-obvious design decision. Read this index, then the specific ADR
 | ADR | Decision | Status | Task |
 | --- | -------- | ------ | ---- |
 | [`0001-one-container-per-task.md`](0001-one-container-per-task.md) | One container per task attempt; cold spawn | accepted | #84 |
+| [`0002-capability-compiler.md`](0002-capability-compiler.md) | Compiler is pure, fail-closed, manifest-sourced | accepted | #85 |
