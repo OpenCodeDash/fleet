@@ -22,3 +22,4 @@ One file per non-obvious design decision. Read this index, then the specific ADR
 | [`0004-review-fresh-clone-pinned-sha.md`](0004-review-fresh-clone-pinned-sha.md) | Reviewer uses a fresh clone at a pinned SHA; feedback is async via board+PR | accepted | #87 |
 | [`0005-stream-events-out.md`](0005-stream-events-out.md) | Stream `/event` + stderr out continuously; block destroy until flushed | accepted | #89 |
 | [`0006-role-privileges-are-data.md`](0006-role-privileges-are-data.md) | Role policies are data; merge to `main` is reviewer-only | accepted | #88 |
+| [`0007-per-container-scoped-tokens.md`](0007-per-container-scoped-tokens.md) | Per-container short-lived scoped tokens; broker separate from compiler | accepted | #90 |
