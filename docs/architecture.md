@@ -39,27 +39,10 @@ Full control loop (states, transitions, completion, recovery): [`orchestrator.md
 
 ## Roles and handoff
 
-Container == task attempt, so author and reviewer are always separate containers. The role
-difference is enforced by the capability compiler, not by prompt text.
-
-| Role | edit/commit | push `feat/*` | run tests | merge `main` | delete branch |
-| ---- | ----------- | ------------- | --------- | ------------ | ------------- |
-| author | yes | yes | yes | no | no |
-| reviewer | no | no | yes | yes | yes |
-
-Handoff: the author pushes the branch and returns `head_sha`; the orchestrator **verifies
-the remote ref exists** before transitioning (agents never move tasks — see
-[`orchestrator.md`](orchestrator.md)). The reviewer gets a fresh container with a clean
-clone at `head_sha` (not the branch tip, which can move).
-
-```
-author → reviewer: { task_id, branch, head_sha, base_sha, pr_url?, acceptance_criteria, author_note }
-reviewer → board:  { verdict: "approve" | "changes", note, pr_review_comments?, merge_sha? }
-```
-
-Reverse (`Changes Requested`): a new author container clones the branch at `head_sha`,
-injects the reviewer's note, fixes, and pushes. Iterations are bounded; after N rounds
-escalate to `Need Help`.
+Container == task attempt, so author and reviewer are always separate containers. Role
+privileges are enforced by the capability compiler (permissions + credential scope), not by
+prompt text. The full contract — role table, handoff payloads, review loop, and the
+reviewer checklist — is in [`handoff.md`](handoff.md).
 
 ## Cautions (must not get wrong)
 
