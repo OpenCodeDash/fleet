@@ -18,6 +18,7 @@ or written down is lost at teardown.
 | Author↔reviewer handoff, review loop, branch/PR artifacts | `./docs/handoff.md` |
 | Streaming / logging / audit that must survive teardown | `./docs/observability.md` |
 | How a container gets secrets / token scopes | `./docs/credentials.md` |
+| Container networking / egress allowlist | `./docs/egress.md` |
 | Recording or changing a design decision | `./docs/adr/README.md` |
 | Dev shell / build / check / test | `./docs/commands.md` |
 
