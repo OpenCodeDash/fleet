@@ -12,6 +12,7 @@ or written down is lost at teardown.
 | You are working on… | Read |
 | ------------------- | ---- |
 | System structure, control/data plane, contracts, role handoff | `./docs/architecture.md` |
+| Changing/overriding an orchestrator setting (defaults live here) | `./docs/configuration.md` |
 | A task's tools / MCPs / permissions (capability set) | `./docs/capability-compiler.md` |
 | Control-plane loop: claim → provision → drive → complete → destroy | `./docs/orchestrator.md` |
 | Author↔reviewer handoff, review loop, branch/PR artifacts | `./docs/handoff.md` |
