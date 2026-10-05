@@ -81,6 +81,29 @@ orchestrator from the agent's structured result.
 | Verification fails | Retry prompt (bounded); then `Need Help` |
 | Container exits unexpectedly | Destroy; requeue |
 
+## Failure semantics
+
+Classify the failure, then either retry or escalate (bounds in
+[configuration.md](configuration.md)):
+
+| Class | Example | Action |
+| ----- | ------- | ------ |
+| Transient infra | provision timeout, proxy blip | retry ≤ `provision.retries`, then `Need Help` |
+| Agent stuck | no event for `run.idleTimeout` | nudge; then abort → destroy → requeue (once) |
+| Container death | OOM, crash | destroy → requeue (once), then `Need Help` |
+| Verification failure | missing remote ref | re-prompt author ≤ `verify.retries`, then `Need Help` |
+| Budget exceeded | `task.budget` | destroy → `Need Help` |
+
+Requeue is safe because durable state is external: the board holds the task and git holds
+any pushed branch. A requeued task restarts from its branch `head_sha` if one exists, else
+from base.
+
+**Push early.** Agents must push progress frequently — anything unpushed is lost when the
+container dies. A requeued task with no pushed commits restarts from scratch.
+
+Retries and requeues are bounded and recorded on the durable task record, so a crash-loop
+cannot spin forever.
+
 ## Crash recovery
 
 On orchestrator restart, reconcile board `In Progress` tasks against running containers by
