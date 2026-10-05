@@ -33,7 +33,8 @@ Full control loop (states, transitions, completion, recovery): [`orchestrator.md
   (`"kanban_*"` gates a server's tools). Full spec: [`capability-compiler.md`](capability-compiler.md).
 - **Event sink** — `.ephemeral` does not link the container journal to the host, so
   in-container logs vanish on teardown. The orchestrator MUST continuously stream `/event`
-  + stderr to durable storage, or all forensics are lost.
+  + stderr to durable storage, or all forensics are lost. Full spec:
+  [`observability.md`](observability.md).
 - **Credential broker** — per-container, short-lived, least-privilege tokens minted at
   provision and revoked at destroy. No shared tokens across agents.
 

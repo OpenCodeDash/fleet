@@ -20,3 +20,4 @@ One file per non-obvious design decision. Read this index, then the specific ADR
 | [`0002-capability-compiler.md`](0002-capability-compiler.md) | Compiler is pure, fail-closed, manifest-sourced | accepted | #85 |
 | [`0003-orchestrator-owns-board.md`](0003-orchestrator-owns-board.md) | Orchestrator is sole board writer; completion is a validated structured result | accepted | #86 |
 | [`0004-review-fresh-clone-pinned-sha.md`](0004-review-fresh-clone-pinned-sha.md) | Reviewer uses a fresh clone at a pinned SHA; feedback is async via board+PR | accepted | #87 |
+| [`0005-stream-events-out.md`](0005-stream-events-out.md) | Stream `/event` + stderr out continuously; block destroy until flushed | accepted | #89 |

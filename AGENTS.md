@@ -15,6 +15,7 @@ or written down is lost at teardown.
 | A task's tools / MCPs / permissions (capability set) | `./docs/capability-compiler.md` |
 | Control-plane loop: claim → provision → drive → complete → destroy | `./docs/orchestrator.md` |
 | Author↔reviewer handoff, review loop, branch/PR artifacts | `./docs/handoff.md` |
+| Streaming / logging / audit that must survive teardown | `./docs/observability.md` |
 | Recording or changing a design decision | `./docs/adr/README.md` |
 | Dev shell / build / check / test | `./docs/commands.md` |
 
