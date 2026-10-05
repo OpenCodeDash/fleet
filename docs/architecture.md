@@ -23,6 +23,7 @@ Paths marked **(TBD)** do not exist yet — this is design phase.
 5. On verified handoff, tears the container down.
 
 Surviving state = git branches + board + streamed events. Nothing else.
+Full control loop (states, transitions, completion, recovery): [`orchestrator.md`](orchestrator.md).
 
 ## Contracts
 
@@ -46,9 +47,10 @@ difference is enforced by the capability compiler, not by prompt text.
 | author | yes | yes | yes | no | no |
 | reviewer | no | no | yes | yes | yes |
 
-Handoff: the author pushes the branch and records `head_sha`; the orchestrator **verifies
-the remote ref exists** before accepting completion. The reviewer gets a fresh container
-with a clean clone at `head_sha` (not the branch tip, which can move).
+Handoff: the author pushes the branch and returns `head_sha`; the orchestrator **verifies
+the remote ref exists** before transitioning (agents never move tasks — see
+[`orchestrator.md`](orchestrator.md)). The reviewer gets a fresh container with a clean
+clone at `head_sha` (not the branch tip, which can move).
 
 ```
 author → reviewer: { task_id, branch, head_sha, base_sha, pr_url?, acceptance_criteria, author_note }
