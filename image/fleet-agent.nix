@@ -26,6 +26,8 @@
       ExecStart = "${pkgs.opencode}/bin/opencode serve --hostname=0.0.0.0 --port=4096";
       Restart = "on-failure";
       RestartSec = 1;
+      # Scoped credentials + provider keys, baked at provision time (mode 0400).
+      EnvironmentFile = [ "-/etc/fleet/opencode/credentials.env" ];
       Environment = [
         "OPENCODE_DISABLE_AUTOUPDATE=1"
         "OPENCODE_DISABLE_PRUNE=1"

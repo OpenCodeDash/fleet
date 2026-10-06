@@ -9,6 +9,7 @@ import {
   ROLE_PROMPTS,
   parseRepoManifest,
   promptReference,
+  renderConfigFiles,
   roleConfigFiles,
 } from "../src/agents/index.ts";
 
@@ -49,6 +50,27 @@ test("compiler emits an agent prompt reference for the role", () => {
 test("roleConfigFiles provides the prompt file to mount", () => {
   const files = roleConfigFiles("reviewer");
   assert.deepEqual(files, [{ path: "prompts/reviewer.md", contents: ROLE_PROMPTS.reviewer }]);
+});
+
+test("renderConfigFiles emits the opencode config and role prompts", () => {
+  const catalog: Catalog = {
+    servers: { kanban: { type: "remote", url: "http://x", toolPrefix: "kanban" } },
+  };
+  const compiled = compile(
+    { taskId: "#1", repo: "acme/app", role: "author", grants: [{ mcp: "kanban" }] },
+    catalog,
+  );
+  const files = renderConfigFiles(compiled, "author");
+  assert.deepEqual(
+    files.map((file) => file.path),
+    ["opencode.json", "prompts/author.md"],
+  );
+  const opencode = JSON.parse(files[0]?.contents ?? "") as {
+    mcp: Record<string, unknown>;
+    agent: { author: { prompt: string } };
+  };
+  assert.ok(opencode.mcp.kanban);
+  assert.equal(opencode.agent.author.prompt, "{file:./prompts/author.md}");
 });
 
 test("the example manifest compiles against the example catalog", () => {

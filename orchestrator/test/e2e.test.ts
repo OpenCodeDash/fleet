@@ -91,7 +91,6 @@ function makeHarness(reviewerVerdicts: Array<ReviewerResult["verdict"]>): {
       return new EventSink({ store: new MemoryEventStore(), correlation, secrets });
     },
     modulePath: "/etc/nixos/image/fleet-agent.nix",
-    configFilesFor: () => [{ path: "opencode.json", contents: "{}" }],
     port: 4096,
     verifyRetries: 0,
   };

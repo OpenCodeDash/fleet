@@ -24,3 +24,4 @@ Tests run on Node's built-in test runner against `.ts` via native type stripping
 | Typecheck | `npm run typecheck` | `orchestrator/` |
 | Lint | `npm run lint` | `orchestrator/` |
 | Test | `npm test` | `orchestrator/` |
+| Run one task attempt | `node orchestrator/src/main.ts run <taskId> <author\|reviewer>` | repo root (see `docs/setup.md` for env) |

@@ -107,7 +107,6 @@ function harness(options: HarnessOptions = {}): {
       return new EventSink({ store: new MemoryEventStore(), correlation, secrets });
     },
     modulePath: "/etc/nixos/image/fleet-agent.nix",
-    configFilesFor: () => [{ path: "opencode.json", contents: "{}" }],
     port: 4096,
     verifyRetries: options.verifyRetries ?? 0,
   };

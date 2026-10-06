@@ -2,6 +2,8 @@ export interface ContainerConfigFile {
   /** Path relative to `/etc/fleet/opencode` inside the container. */
   path: string;
   contents: string;
+  /** Optional file mode (e.g. `0400`) for secret files. */
+  mode?: string;
 }
 
 export interface ContainerSpec {

@@ -1,4 +1,5 @@
 import { CapabilityError } from "../capability/types.ts";
+import { renderConfigFiles } from "../agents/config-files.ts";
 import type { EventSink } from "../observability/index.ts";
 import type { ContainerHandle } from "../provision/types.ts";
 import type {
@@ -62,10 +63,19 @@ export class TaskLoop {
         data: { capabilityHash: compiled.capabilityHash, servers: compiled.audit.servers },
       });
 
+      const configFiles = renderConfigFiles(compiled, attempt.role);
+      const envEntries = Object.entries(credentials.env);
+      if (envEntries.length > 0) {
+        configFiles.push({
+          path: "credentials.env",
+          contents: `${envEntries.map(([key, value]) => `${key}=${value}`).join("\n")}\n`,
+          mode: "0400",
+        });
+      }
       handle = await this.deps.provision({
         name: attempt.containerId,
         modulePath: this.deps.modulePath,
-        configFiles: this.deps.configFilesFor(attempt.containerId),
+        configFiles,
         port: this.deps.port,
       });
       await sink.record({

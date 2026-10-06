@@ -124,20 +124,32 @@ In each target repo add `.fleet/capabilities.json`:
 The compiler validates these against the catalog and fails closed on anything unknown:
 [`capability-compiler.md`](capability-compiler.md).
 
-## 7. Run the orchestrator (pending)
+## 7. Run the orchestrator (runnable)
 
-The control loop, scheduler, reconciler, provisioner, egress proxy, event sink, credential
-broker, and capability compiler are implemented and unit-tested — but the process entrypoint
-and the live adapters are not wired yet:
+The entrypoint and live adapters are wired. Point it at the board, the host, and the repos,
+then run one attempt:
 
-- #114 opencode AgentRunner adapter
-- #115 entrypoint + BoardPort
-- #117 durable event store + credential providers
-- #121 host-side egress proxy + event forwarder
+```sh
+export FLEET_BOARD_URL=http://board.internal \
+       FLEET_BOARD_ID=<board-id> \
+       FLEET_SSH_HOST=agents.bigbox \
+       FLEET_BOARD_ID=<board-id> \
+       FLEET_CATALOG=/etc/fleet/catalog.json \
+       FLEET_REPO_DIR=/srv/repo \
+       FLEET_REPO=git@github.com:you/app.git \
+       FLEET_PROMPT='Fix issue #12 and push feat/issue-12'
+export FLEET_MODEL_PROVIDER=anthropic FLEET_MODEL_ID=<model>
+export FLEET_INJECT_ANTHROPIC_API_KEY=sk-...     # injected into the container
 
-When those land, this becomes running the orchestrator entrypoint against the config from
-step 5. Until then the modules are exercised only in tests
-([`../orchestrator/test/e2e.test.ts`](../orchestrator/test/e2e.test.ts)) rather than a binary.
+node orchestrator/src/main.ts run 84 author       # one attempt
+```
+
+`run` performs a single attempt: compile → mint → provision a container → drive the agent →
+verify the push against the remote → move the board task. It prints the outcome as JSON.
+
+Still required before a full unattended run: the host-side **egress proxy + event forwarder**
+(#121) so containers can reach the model provider, and network isolation.
+
 
 ## 8. Verify
 

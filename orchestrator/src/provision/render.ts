@@ -31,10 +31,13 @@ export function renderContainerConfig(spec: ContainerSpec): string {
     throw new ProvisionError(`container name "${spec.name}" has invalid characters`);
   }
   const etc = spec.configFiles
-    .map(
-      (file) =>
-        `    ${nixString(`fleet/opencode/${file.path}`)}.text = ${nixString(file.contents)};`,
-    )
+    .map((file) => {
+      const key = nixString(`fleet/opencode/${file.path}`);
+      if (file.mode !== undefined) {
+        return `    ${key} = { text = ${nixString(file.contents)}; mode = ${nixString(file.mode)}; };`;
+      }
+      return `    ${key}.text = ${nixString(file.contents)};`;
+    })
     .join("\n");
   return [
     "{ ... }:",
