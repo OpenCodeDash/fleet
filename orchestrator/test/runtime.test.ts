@@ -11,6 +11,7 @@ const fullEnv: Record<string, string> = {
   FLEET_BOARD_URL: "http://board",
   FLEET_BOARD_ID: "b1",
   FLEET_SSH_HOST: "agents.bigbox",
+  FLEET_REPO: "https://github.com/you/app.git",
   FLEET_REPO_DIR: "/srv/repo",
   FLEET_INJECT_ANTHROPIC_API_KEY: "sk-test",
   FLEET_MODEL_PROVIDER: "anthropic",

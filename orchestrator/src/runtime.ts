@@ -24,7 +24,10 @@ export interface RuntimeOptions {
   boardToken?: string;
   sshHost?: string;
   sshUser?: string;
-  repoDir: string;
+  /** Git remote URL agents clone/push and the verifier checks (e.g. the repo URL). */
+  repo: string;
+  /** Local clone; only needed for the reviewer's ancestry check. */
+  repoDir?: string;
   modulePath: string;
   eventsPath: string;
   model?: { providerID: string; modelID: string };
@@ -73,8 +76,12 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   const provisioner = new ContainerProvisioner(
     new NixosContainerBackend(commandRunner, tunnel === undefined ? {} : { tunnel }),
   );
-  // The repo clone lives next to the orchestrator, so git verification runs locally.
-  const git = new CommandGitVerifier({ repoDir: options.repoDir, runner: localExecutor });
+  // Verification uses the remote URL directly (no clone needed for author handoffs).
+  const git = new CommandGitVerifier({
+    remote: options.repo,
+    ...(options.repoDir === undefined ? {} : { repoDir: options.repoDir }),
+    runner: localExecutor,
+  });
   const agentRunner = new OpencodeAgentRunner({ model: options.model, agent: options.agent });
   const broker = new CredentialBroker({
     providers: envCredentialProviders(providerNames(catalog), options.env),
@@ -138,7 +145,8 @@ export function runtimeOptionsFromEnv(
     boardToken: env.FLEET_BOARD_TOKEN,
     sshHost: env.FLEET_SSH_HOST,
     sshUser: env.FLEET_SSH_USER,
-    repoDir: required(env, "FLEET_REPO_DIR"),
+    repo: required(env, "FLEET_REPO"),
+    repoDir: env.FLEET_REPO_DIR,
     modulePath: env.FLEET_MODULE_PATH ?? "/etc/nixos/image/fleet-agent.nix",
     eventsPath: env.FLEET_EVENTS_PATH ?? "fleet-events.jsonl",
     model:

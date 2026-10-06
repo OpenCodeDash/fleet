@@ -17,7 +17,7 @@ function runnerReturning(result: Partial<CommandResult>): {
   return { runner, calls };
 }
 
-const options = (runner: CommandRunner) => ({ repoDir: "/work/repo", runner });
+const options = (runner: CommandRunner) => ({ repoDir: "/work/repo", remote: "origin", runner });
 
 test("remoteRefExists is true when the ref still points at the reviewed sha", async () => {
   const { runner, calls } = runnerReturning({
@@ -26,6 +26,13 @@ test("remoteRefExists is true when the ref still points at the reviewed sha", as
   const verifier = new CommandGitVerifier(options(runner));
   assert.equal(await verifier.remoteRefExists("feat/x", "abc123"), true);
   assert.deepEqual(calls[0]?.args, ["-C", "/work/repo", "ls-remote", "origin", "refs/heads/feat/x"]);
+});
+
+test("remoteRefExists queries the remote URL directly when there is no clone", async () => {
+  const { runner, calls } = runnerReturning({ stdout: "abc123\trefs/heads/feat/x\n" });
+  const verifier = new CommandGitVerifier({ remote: "https://example.com/r.git", runner });
+  assert.equal(await verifier.remoteRefExists("feat/x", "abc123"), true);
+  assert.deepEqual(calls[0]?.args, ["ls-remote", "https://example.com/r.git", "refs/heads/feat/x"]);
 });
 
 test("remoteRefExists is false when the ref moved or ls-remote failed", async () => {

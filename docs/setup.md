@@ -133,16 +133,19 @@ then run one attempt:
 export FLEET_BOARD_URL=http://board.internal \
        FLEET_BOARD_ID=<board-id> \
        FLEET_SSH_HOST=agents.bigbox \
-       FLEET_BOARD_ID=<board-id> \
        FLEET_CATALOG=/etc/fleet/catalog.json \
-       FLEET_REPO_DIR=/srv/repo \
-       FLEET_REPO=git@github.com:you/app.git \
-       FLEET_PROMPT='Fix issue #12 and push feat/issue-12'
+       FLEET_REPO=https://github.com/you/app.git \
+       FLEET_PROMPT='Fix issue #12: clone the repo, implement it, and push a branch'
+
 export FLEET_MODEL_PROVIDER=anthropic FLEET_MODEL_ID=<model>
 export FLEET_INJECT_ANTHROPIC_API_KEY=sk-...     # injected into the container
 
 node orchestrator/src/main.ts run 84 author       # one attempt
 ```
+
+`FLEET_REPO` is the remote the **container** clones and pushes, and the verifier checks it
+directly with `git ls-remote` — no orchestrator-side clone needed. `FLEET_REPO_DIR` is only
+required for the reviewer's ancestry check.
 
 `run` performs a single attempt: compile → mint → provision a container → drive the agent →
 verify the push against the remote → move the board task. It prints the outcome as JSON.
@@ -153,8 +156,8 @@ Run the orchestrator as a plain Node container (`node` + `git` + `openssh-client
 `nix develop` shell is only for development. Build/run with `orchestrator/Dockerfile` and
 configure entirely via `FLEET_*` env. Off-box, the orchestrator reaches each container's
 host-private `:4096` through an **SSH tunnel** to `FLEET_SSH_HOST` (no tunnel is used when
-`FLEET_SSH_HOST` is unset and the orchestrator is co-located). Mount the fleet host's SSH key
-and a clone of the target repo.
+`FLEET_SSH_HOST` is unset and the orchestrator is co-located). Mount the fleet host's SSH key.
+The container clones/pushes `FLEET_REPO` itself; the orchestrator needs no repo clone.
 
 Still required before a full unattended run: the host-side **egress** for containers to reach
 the model provider (#121) and network isolation.
