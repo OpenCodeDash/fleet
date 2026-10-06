@@ -1,13 +1,13 @@
 import { spawn } from "node:child_process";
-import type { CommandResult } from "../provision/types.ts";
+import type { CommandResult, CommandRunner } from "../provision/types.ts";
 
 /** Executes a local process. Injected so remote-command building is testable. */
 export interface Executor {
   exec(file: string, args: string[], options?: { input?: string }): Promise<CommandResult>;
 }
 
-/** Real executor backed by `node:child_process`. */
-export class NodeExecutor implements Executor {
+/** Real executor backed by `node:child_process`; also usable directly as a `CommandRunner`. */
+export class NodeExecutor implements Executor, CommandRunner {
   exec(file: string, args: string[], options: { input?: string } = {}): Promise<CommandResult> {
     return new Promise((resolve) => {
       const child = spawn(file, args, { stdio: ["pipe", "pipe", "pipe"] });
@@ -35,5 +35,9 @@ export class NodeExecutor implements Executor {
       if (options.input !== undefined) child.stdin?.write(options.input);
       child.stdin?.end();
     });
+  }
+
+  run(command: string, args: string[], options?: { input?: string }): Promise<CommandResult> {
+    return this.exec(command, args, options);
   }
 }
