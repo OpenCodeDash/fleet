@@ -12,6 +12,7 @@ Durable state lives only in the **git remote** and the **kanban board**.
 ## Docs
 
 - [`AGENTS.md`](AGENTS.md) — agent entry point and index
+- [`docs/setup.md`](docs/setup.md) — stand the fleet up, start to finish
 - [`docs/architecture.md`](docs/architecture.md) — system structure, contracts, role handoff
 - [`docs/adr/`](docs/adr/README.md) — design decisions (ADRs)
 - [`docs/commands.md`](docs/commands.md) — dev shell / build / check

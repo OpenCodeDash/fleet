@@ -11,6 +11,7 @@ or written down is lost at teardown.
 
 | You are working on… | Read |
 | ------------------- | ---- |
+| Bringing the whole fleet up, start to finish | `./docs/setup.md` |
 | System structure, control/data plane, contracts, role handoff | `./docs/architecture.md` |
 | Changing/overriding an orchestrator setting (defaults live here) | `./docs/configuration.md` |
 | A task's tools / MCPs / permissions (capability set) | `./docs/capability-compiler.md` |
