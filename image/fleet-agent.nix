@@ -16,6 +16,13 @@
   documentation.enable = false;
   environment.systemPackages = [ pkgs.opencode pkgs.git ];
 
+  # Agents push over HTTPS with a token injected at runtime as GITHUB_TOKEN; the helper reads
+  # it from the environment, so the token is never baked into the image or the config.
+  environment.etc."gitconfig".text = ''
+    [credential "https://github.com"]
+      helper = "!f() { echo username=x-access-token; echo password=$GITHUB_TOKEN; }; f"
+  '';
+
   # The one long-lived process: a headless opencode server the orchestrator talks to.
   systemd.services.opencode-serve = {
     description = "opencode headless server";
