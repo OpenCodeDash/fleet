@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { parse as parseToml } from "smol-toml";
+import { DURATION_RE } from "./duration.ts";
 
 /** Thrown for any invalid or floor-violating configuration. */
 export class ConfigError extends Error {
@@ -10,7 +11,6 @@ export class ConfigError extends Error {
 }
 
 export type Duration = string;
-const DURATION_RE = /^\d+(ms|s|m|h|d)$/;
 
 export interface Config {
   credentials: { ttl: Duration; revokeOnDestroy: boolean };
