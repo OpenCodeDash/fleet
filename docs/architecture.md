@@ -16,6 +16,7 @@ Paths marked **(TBD)** do not exist yet.
 | Egress proxy | `./orchestrator/src/egress/` | Default-deny HTTP(S) proxy enforcing the per-container allowlist |
 | Event sink | `./orchestrator/src/observability/` | Streams `/event` + stderr + lifecycle into redacted durable storage |
 | Agent configs | `./orchestrator/src/agents/` | Role prompts + config files; repo capability manifest parser |
+| Git verifier | `./orchestrator/src/git/` | Verifies pushed refs and merges against the remote |
 
 ## Data flow
 
