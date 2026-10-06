@@ -49,10 +49,9 @@ function makeHarness(reviewerVerdicts: Array<ReviewerResult["verdict"]>): {
       revoked.push(containerId);
     },
     async provision(spec) {
-      return { name: spec.name, spec };
+      return { name: spec.name, spec, address: `http://${spec.name}:4096` };
     },
     async destroy() {},
-    addressFor: (id) => `http://${id}:4096`,
     async runAgent(input): Promise<CompletionResult> {
       if (input.role === "author") {
         authorSeq += 1;
@@ -91,8 +90,8 @@ function makeHarness(reviewerVerdicts: Array<ReviewerResult["verdict"]>): {
     sinkFor(correlation, secrets) {
       return new EventSink({ store: new MemoryEventStore(), correlation, secrets });
     },
-    systemPath: "/nix/store/sys",
-    configDirFor: (id) => `/run/fleet/${id}`,
+    modulePath: "/etc/nixos/image/fleet-agent.nix",
+    configFilesFor: () => [{ path: "opencode.json", contents: "{}" }],
     port: 4096,
     verifyRetries: 0,
   };

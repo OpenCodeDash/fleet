@@ -1,7 +1,7 @@
-# NixOS system for one ephemeral agent container.
+# NixOS system for one disposable agent container.
 #
-# The provisioner instantiates this as a systemd-nspawn container with an ephemeral rootfs
-# (`containers.<name>.ephemeral = true`), so nothing here needs to persist across boots.
+# The provisioner instantiates this with `nixos-container` (create/start/destroy) per task
+# attempt, so nothing here needs to persist across boots. See ADR 0001 and ADR 0012.
 # The orchestrator injects the capability config + scoped credentials read-only at
 # /etc/fleet/opencode, and drives the headless server over HTTP. See docs/architecture.md,
 # docs/orchestrator.md, and ADR 0001.

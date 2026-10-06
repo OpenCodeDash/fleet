@@ -64,20 +64,20 @@ export class TaskLoop {
 
       handle = await this.deps.provision({
         name: attempt.containerId,
-        systemPath: this.deps.systemPath,
-        configDir: this.deps.configDirFor(attempt.containerId),
+        modulePath: this.deps.modulePath,
+        configFiles: this.deps.configFilesFor(attempt.containerId),
         port: this.deps.port,
       });
       await sink.record({
         source: "lifecycle",
         type: "provisioned",
-        data: { container: attempt.containerId },
+        data: { container: attempt.containerId, address: handle.address },
       });
 
       const outcome =
         attempt.role === "author"
-          ? await this.runAuthor(attempt, sink)
-          : await this.runReviewer(attempt, sink);
+          ? await this.runAuthor(attempt, sink, handle.address)
+          : await this.runReviewer(attempt, sink, handle.address);
 
       await sink.flush();
       await this.deps.destroy(handle);
@@ -97,7 +97,11 @@ export class TaskLoop {
     }
   }
 
-  private async runAuthor(attempt: TaskAttempt, sink: EventSink): Promise<AttemptOutcome> {
+  private async runAuthor(
+    attempt: TaskAttempt,
+    sink: EventSink,
+    address: string,
+  ): Promise<AttemptOutcome> {
     let lastReason = "";
     for (let round = 0; round <= this.deps.verifyRetries; round += 1) {
       const prompt =
@@ -105,7 +109,7 @@ export class TaskLoop {
           ? attempt.prompt
           : `Your handoff failed verification: ${lastReason}. Fix it and return the result again.`;
       const completion = await this.deps.runAgent({
-        address: this.deps.addressFor(attempt.containerId),
+        address,
         role: "author",
         prompt,
         sessionTitle: attempt.taskId,
@@ -132,9 +136,13 @@ export class TaskLoop {
     };
   }
 
-  private async runReviewer(attempt: TaskAttempt, sink: EventSink): Promise<AttemptOutcome> {
+  private async runReviewer(
+    attempt: TaskAttempt,
+    sink: EventSink,
+    address: string,
+  ): Promise<AttemptOutcome> {
     const completion = await this.deps.runAgent({
-      address: this.deps.addressFor(attempt.containerId),
+      address,
       role: "reviewer",
       prompt: attempt.prompt,
       sessionTitle: attempt.taskId,

@@ -1,6 +1,6 @@
 import type { CapabilityRequest, CompiledCapabilities, Role } from "../capability/types.ts";
 import type { Correlation, EventSink } from "../observability/index.ts";
-import type { ContainerHandle, ContainerSpec } from "../provision/types.ts";
+import type { ContainerConfigFile, ContainerHandle, ContainerSpec } from "../provision/types.ts";
 
 export interface AuthorResult {
   status: "done";
@@ -66,13 +66,14 @@ export interface LoopDeps {
   revokeCredentials(containerId: string): Promise<void>;
   provision(spec: ContainerSpec): Promise<ContainerHandle>;
   destroy(handle: ContainerHandle): Promise<void>;
-  addressFor(containerId: string): string;
   runAgent(input: AgentRunInput): Promise<CompletionResult>;
   git: GitVerifier;
   board: BoardPort;
   sinkFor(correlation: Correlation, secrets: string[]): EventSink;
-  systemPath: string;
-  configDirFor(containerId: string): string;
+  /** Host path of the container module (e.g. /etc/nixos/image/fleet-agent.nix). */
+  modulePath: string;
+  /** Per-task files baked into /etc/fleet/opencode in the container. */
+  configFilesFor(containerId: string): ContainerConfigFile[];
   port: number;
   verifyRetries: number;
 }

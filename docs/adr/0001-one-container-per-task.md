@@ -12,8 +12,9 @@ container hosting many sessions.
 ## Decision
 
 One container per task attempt: container == `opencode serve` == opencode session.
-Cold spawn via `systemd-nspawn` with `containers.<name>.ephemeral = true`; no warm pool
-in v1.
+Cold spawn of a disposable container per attempt via `nixos-container`
+(create/start/destroy — see [ADR 0012](0012-containers-via-nixos-container.md)); no warm
+pool in v1.
 
 ## Consequences
 

@@ -23,7 +23,7 @@ Paths marked **(TBD)** do not exist yet.
 
 1. Orchestrator claims a task from the board.
 2. Compiles the capability set → immutable `opencode.json` + scoped credentials.
-3. Provisions an nspawn container (`.ephemeral = true`), config mounted read-only.
+3. Provisions a NixOS container (`nixos-container`) with the capability config baked in.
 4. Drives `session.create` / `session.promptAsync`; consumes the `/event` SSE stream.
 5. On verified handoff, tears the container down.
 

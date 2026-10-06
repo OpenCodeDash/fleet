@@ -83,12 +83,11 @@ function harness(options: HarnessOptions = {}): {
     async provision(spec) {
       if (options.provisionFails === true) throw new ProvisionError("provision failed");
       provisioned.push(spec.name);
-      return { name: spec.name, spec };
+      return { name: spec.name, spec, address: `http://${spec.name}:4096` };
     },
     async destroy(handle) {
       destroyed.push(handle.name);
     },
-    addressFor: (id) => `http://${id}:4096`,
     async runAgent(input) {
       agentCalls.push(input);
       const completion = completions[Math.min(completionIndex, completions.length - 1)];
@@ -107,8 +106,8 @@ function harness(options: HarnessOptions = {}): {
     sinkFor(correlation, secrets) {
       return new EventSink({ store: new MemoryEventStore(), correlation, secrets });
     },
-    systemPath: "/nix/store/sys",
-    configDirFor: (id) => `/run/fleet/${id}`,
+    modulePath: "/etc/nixos/image/fleet-agent.nix",
+    configFilesFor: () => [{ path: "opencode.json", contents: "{}" }],
     port: 4096,
     verifyRetries: options.verifyRetries ?? 0,
   };

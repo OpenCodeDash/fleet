@@ -3,8 +3,8 @@
 Read when working on streaming, logging, auditing, or anything that must survive container
 teardown.
 
-`.ephemeral` containers do **not** link their journal to the host, so in-container logs
-vanish on teardown. Everything worth keeping must be streamed out continuously. See
+Containers are destroyed at teardown, so nothing in-container survives the task. Logs are
+streamed out continuously and redacted rather than relied on afterwards. See
 [ADR 0005](adr/0005-stream-events-out.md).
 
 ## What to capture

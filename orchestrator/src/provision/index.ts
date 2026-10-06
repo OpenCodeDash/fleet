@@ -1,4 +1,4 @@
 export * from "./types.ts";
-export * from "./args.ts";
+export * from "./render.ts";
 export * from "./backend.ts";
 export * from "./provisioner.ts";

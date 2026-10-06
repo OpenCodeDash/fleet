@@ -21,7 +21,7 @@ const defaultSleep = (ms: number): Promise<void> =>
 /**
  * Owns a container's runtime lifecycle: start it, wait until the opencode server answers,
  * and tear it down. The capability/credential work happens before this (compiler + broker)
- * and the config is already mounted when `provision` is called. See docs/orchestrator.md.
+ * and is baked into the container image by the backend. See docs/orchestrator.md.
  */
 export class ContainerProvisioner {
   private readonly backend: ContainerBackend;
@@ -50,7 +50,7 @@ export class ContainerProvisioner {
 
   private async waitReady(handle: ContainerHandle): Promise<void> {
     const attempts = Math.max(1, Math.ceil(this.readyTimeoutMs / this.pollIntervalMs));
-    const url = `${this.backend.address(handle)}/global/health`;
+    const url = `${handle.address}/global/health`;
 
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       if (await this.isHealthy(url)) return;

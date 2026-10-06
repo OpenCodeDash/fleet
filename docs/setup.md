@@ -59,9 +59,20 @@ nix run .#fleet-host-vm
    nixos-install --flake /tmp/fleet#fleet-host
    ```
 
-The host enables containers, the `vz-fleet` nspawn network zone (bridge + DHCP +
-machine-name DNS), preloads the agent container system into the host store, and enables
-OpenSSH for the off-box orchestrator. See [`../host/fleet-host.nix`](../host/fleet-host.nix).
+The host enables `nixos-container`, preloads the agent container system into the host store,
+and enables OpenSSH for the off-box orchestrator. See
+[`../host/fleet-host.nix`](../host/fleet-host.nix).
+
+**Verify a container boots** (uses the same mechanism the provisioner does):
+```sh
+sudo nixos-container create smoke --flake /etc/nixos#fleet-agent
+sudo nixos-container start smoke
+machinectl list                    # expect "smoke"
+sudo nixos-container show-ip smoke
+sudo nixos-container terminate smoke
+sudo nixos-container destroy smoke
+```
+(Names must be ≤ 11 characters.)
 
 **BIOS instead of UEFI?** Edit `host/fleet-host.nix`: drop the two `boot.loader.systemd-boot`
 lines and add `boot.loader.grub = { enable = true; devices = [ "/dev/nvme0n1" ]; };`.

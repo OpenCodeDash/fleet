@@ -27,3 +27,4 @@ One file per non-obvious design decision. Read this index, then the specific ADR
 | [`0009-bounded-review-iterations.md`](0009-bounded-review-iterations.md) | Review iterations are bounded (default 3); escalate to `Need Help` | accepted | #92 |
 | [`0010-bounded-failure-recovery.md`](0010-bounded-failure-recovery.md) | Failures classified; bounded retry/requeue from external state | accepted | #93 |
 | [`0011-central-limiters.md`](0011-central-limiters.md) | Cross-container limiters live in the control plane | accepted | #94 |
+| [`0012-containers-via-nixos-container.md`](0012-containers-via-nixos-container.md) | Containers provisioned with `nixos-container` (create/start/destroy) | accepted | #125 |

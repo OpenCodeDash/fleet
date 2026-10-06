@@ -5,9 +5,9 @@ Task: #89
 
 ## Context
 
-`containers.<name>.ephemeral = true` explicitly does not link the container journal to the
-host — the rootfs and its logs are discarded on shutdown. Debugging or auditing from inside
-the container after the fact is therefore impossible.
+Containers are destroyed at teardown (`nixos-container destroy`), so the rootfs is gone.
+Even where the guest journal is linked to the host, it is unstructured, unredacted, and not
+correlated to a task — auditing from it after the fact is impractical.
 
 ## Decision
 
@@ -28,8 +28,7 @@ the stream is flushed**. Records are redacted on ingest and correlated by `taskI
 
 ## Alternatives rejected
 
-- **Rely on the container journal** — not linked to the host under `.ephemeral`; logs are
-  lost.
+- **Rely on the container journal** — unstructured/unredacted and gone at destroy; not auditable.
 - **Collect logs only at teardown** — a crash loses everything, which is exactly the case
   that matters most.
 - **Persist the raw stream** — would store credential material.

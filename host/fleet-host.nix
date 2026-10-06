@@ -27,9 +27,9 @@
   # The agents: each is a systemd-nspawn container, started/stopped by the orchestrator.
   boot.enableContainers = true;
 
-  # Containers attach to a systemd-nspawn network zone (`vz-fleet`). nspawn provides the
-  # bridge, a DHCP server, and machine-name DNS for the zone, so a container is reachable
-  # from the host at http://<machine-name>:4096 with no per-interface config here.
+  # Containers are created with `nixos-container`, which gives each a private veth to this
+  # host (10.233.x.0/24); the host is the gateway, so container egress passes through the
+  # host's proxy and the host can reach each container's opencode server. See ADR 0012.
   networking.useNetworkd = true;
   networking.firewall.enable = true;
   # The off-box orchestrator connects over SSH; this is the only inbound port.
