@@ -10,14 +10,16 @@
   system.stateVersion = "25.11";
   networking.hostName = "fleet-host";
 
-  # Bootable root. For a real install, point the device/label at your disk (or use disko);
-  # these defaults suit the QEMU VM.
-  fileSystems."/" = {
-    device = "/dev/disk/by-label/fleet";
-    fsType = "ext4";
-  };
-  boot.loader.grub.enable = true;
-  boot.loader.grub.devices = [ "/dev/vda" ];
+  # Machine-specific disk layout. Regenerate on the target with
+  # `nixos-generate-config --root /mnt` and replace host/hardware-configuration.nix
+  # (or swap this for a disko config). See docs/setup.md.
+  imports = [ ./hardware-configuration.nix ];
+
+  # UEFI boot. For a BIOS machine, replace with grub:
+  #   boot.loader.grub.enable = true;
+  #   boot.loader.grub.devices = [ "/dev/sdX" ];
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.efi.canTouchEfiVariables = true;
 
   # The agents: each is a systemd-nspawn container, started/stopped by the orchestrator.
   boot.enableContainers = true;

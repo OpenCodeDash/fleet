@@ -20,16 +20,51 @@ nix develop   # provides node, git, opencode
 
 ## 2. Stand up the host (runnable)
 
-The host does nothing but run disposable `systemd-nspawn` containers. For a quick local host:
+The host does nothing but run disposable `systemd-nspawn` containers. Two ways to get one.
+
+### Local VM (quickest)
 
 ```sh
 nix run .#fleet-host-vm
 ```
 
-For a real machine, add a disk/bootloader module (or disko) and install
-`nixosConfigurations.fleet-host`. See [`../host/fleet-host.nix`](../host/fleet-host.nix): it
-enables containers, the `vz-fleet` nspawn network zone (bridge + DHCP + machine-name DNS),
-and preloads the agent container system into the host store.
+### Real machine, from a NixOS live USB
+
+1. Partition and format (example: UEFI, whole disk `/dev/nvme0n1` — check `lsblk` first):
+
+   ```sh
+   parted /dev/nvme0n1 -- mklabel gpt
+   parted /dev/nvme0n1 -- mkpart ESP fat32 1MiB 512MiB
+   parted /dev/nvme0n1 -- set 1 esp on
+   parted /dev/nvme0n1 -- mkpart root ext4 512MiB 100%
+   mkfs.fat -F32 /dev/nvme0n1p1
+   mkfs.ext4 -L nixos /dev/nvme0n1p2
+   mount /dev/nvme0n1p2 /mnt
+   mkdir -p /mnt/boot && mount /dev/nvme0n1p1 /mnt/boot
+   ```
+
+2. Fetch the flake and capture this machine's hardware config:
+
+   ```sh
+   git clone https://github.com/OpenCodeDash/fleet /tmp/fleet
+   nixos-generate-config --root /mnt
+   cp /mnt/etc/nixos/hardware-configuration.nix /tmp/fleet/host/hardware-configuration.nix
+   ```
+
+   Replace the committed placeholder — it exists only so the flake evaluates in CI.
+
+3. Install:
+
+   ```sh
+   nixos-install --flake /tmp/fleet#fleet-host
+   ```
+
+The host enables containers, the `vz-fleet` nspawn network zone (bridge + DHCP +
+machine-name DNS), preloads the agent container system into the host store, and enables
+OpenSSH for the off-box orchestrator. See [`../host/fleet-host.nix`](../host/fleet-host.nix).
+
+**BIOS instead of UEFI?** Edit `host/fleet-host.nix`: drop the two `boot.loader.systemd-boot`
+lines and add `boot.loader.grub = { enable = true; devices = [ "/dev/nvme0n1" ]; };`.
 
 ## 3. Create the board (runnable)
 
