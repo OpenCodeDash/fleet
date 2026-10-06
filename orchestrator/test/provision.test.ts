@@ -161,6 +161,23 @@ test("provision retries readiness then times out", async () => {
   );
 });
 
+test("opens a tunnel for a remote orchestrator and closes it on stop", async () => {
+  const { runner } = recordingRunner([ok(), ok(), ok(), ok(), ok("10.233.1.2\n")]);
+  let closed = false;
+  const backend = new NixosContainerBackend(runner, {
+    tunnel: () => ({
+      localPort: 41500,
+      close: () => {
+        closed = true;
+      },
+    }),
+  });
+  const handle = await backend.start(spec);
+  assert.equal(handle.address, "http://127.0.0.1:41500");
+  await backend.stop(handle);
+  assert.equal(closed, true);
+});
+
 test("destroy delegates to the backend", async () => {
   const backend = fakeBackend();
   await new ContainerProvisioner(backend.backend).destroy({

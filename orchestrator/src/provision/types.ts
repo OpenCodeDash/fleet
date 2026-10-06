@@ -22,6 +22,8 @@ export interface ContainerHandle {
   spec: ContainerSpec;
   /** Base URL the orchestrator uses to reach this container's opencode server. */
   address: string;
+  /** Closes any host-side tunnel opened for this container (remote mode). */
+  close?: () => void;
 }
 
 export interface CommandResult {

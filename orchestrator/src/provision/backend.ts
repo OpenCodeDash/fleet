@@ -1,4 +1,5 @@
 import { renderContainerConfig } from "./render.ts";
+import type { TunnelFactory } from "../remote/tunnel.ts";
 import {
   ProvisionError,
   type CommandRunner,
@@ -11,6 +12,14 @@ export interface ContainerBackend {
   stop(handle: ContainerHandle): Promise<void>;
 }
 
+export interface ContainerBackendOptions {
+  /**
+   * Opens a host-side tunnel to the container. Required for an off-box orchestrator, which
+   * cannot reach the container's host-private address directly.
+   */
+  tunnel?: TunnelFactory;
+}
+
 const CONFIG_DIR = "/run/fleet";
 
 /**
@@ -21,9 +30,11 @@ const CONFIG_DIR = "/run/fleet";
  */
 export class NixosContainerBackend implements ContainerBackend {
   private readonly runner: CommandRunner;
+  private readonly tunnel: TunnelFactory | undefined;
 
-  constructor(runner: CommandRunner) {
+  constructor(runner: CommandRunner, options: ContainerBackendOptions = {}) {
     this.runner = runner;
+    this.tunnel = options.tunnel;
   }
 
   async start(spec: ContainerSpec): Promise<ContainerHandle> {
@@ -48,10 +59,20 @@ export class NixosContainerBackend implements ContainerBackend {
     if (ipResult.code !== 0 || ip.length === 0) {
       throw new ProvisionError(`container "${spec.name}" started but reported no IP`);
     }
-    return { name: spec.name, spec, address: `http://${ip}:${spec.port}` };
+    if (this.tunnel === undefined) {
+      return { name: spec.name, spec, address: `http://${ip}:${spec.port}` };
+    }
+    const tunnel = this.tunnel(ip, spec.port);
+    return {
+      name: spec.name,
+      spec,
+      address: `http://127.0.0.1:${tunnel.localPort}`,
+      close: () => tunnel.close(),
+    };
   }
 
   async stop(handle: ContainerHandle): Promise<void> {
+    handle.close?.();
     // Terminate is best-effort (the machine may already be gone); destroy removes the root.
     await this.runner.run("nixos-container", ["terminate", handle.name]);
     const destroy = await this.runner.run("nixos-container", ["destroy", handle.name]);

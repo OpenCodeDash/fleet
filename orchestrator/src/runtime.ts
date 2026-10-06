@@ -5,7 +5,7 @@ import { CredentialBroker, envCredentialProviders } from "./credentials/index.ts
 import { BoardClient } from "./board/client.ts";
 import { createBoardPort } from "./board/port.ts";
 import { CommandGitVerifier } from "./git/index.ts";
-import { NodeExecutor, SshCommandRunner } from "./remote/index.ts";
+import { NodeExecutor, SshCommandRunner, makeSshTunnelFactory } from "./remote/index.ts";
 import { NixosContainerBackend } from "./provision/backend.ts";
 import { ContainerProvisioner } from "./provision/provisioner.ts";
 import type { CommandRunner } from "./provision/types.ts";
@@ -58,12 +58,21 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   });
   const localExecutor = new NodeExecutor();
   // When no SSH host is configured the orchestrator runs commands locally (co-located with
-  // the container host); otherwise it drives nixos-container over SSH.
-  const commandRunner: CommandRunner =
-    options.sshHost === undefined || options.sshHost.length === 0
-      ? localExecutor
-      : new SshCommandRunner({ host: options.sshHost, user: options.sshUser, executor: localExecutor });
-  const provisioner = new ContainerProvisioner(new NixosContainerBackend(commandRunner));
+  // the container host); otherwise it drives nixos-container over SSH, and reaches each
+  // container's host-private port through an SSH tunnel.
+  const remote = options.sshHost !== undefined && options.sshHost.length > 0;
+  const sshHost = options.sshHost ?? "";
+  const commandRunner: CommandRunner = remote
+    ? new SshCommandRunner({ host: sshHost, user: options.sshUser, executor: localExecutor })
+    : localExecutor;
+  const tunnel = remote
+    ? makeSshTunnelFactory({
+        target: options.sshUser === undefined ? sshHost : `${options.sshUser}@${sshHost}`,
+      })
+    : undefined;
+  const provisioner = new ContainerProvisioner(
+    new NixosContainerBackend(commandRunner, tunnel === undefined ? {} : { tunnel }),
+  );
   // The repo clone lives next to the orchestrator, so git verification runs locally.
   const git = new CommandGitVerifier({ repoDir: options.repoDir, runner: localExecutor });
   const agentRunner = new OpencodeAgentRunner({ model: options.model, agent: options.agent });

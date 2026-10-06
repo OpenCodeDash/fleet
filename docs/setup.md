@@ -147,8 +147,17 @@ node orchestrator/src/main.ts run 84 author       # one attempt
 `run` performs a single attempt: compile → mint → provision a container → drive the agent →
 verify the push against the remote → move the board task. It prints the outcome as JSON.
 
-Still required before a full unattended run: the host-side **egress proxy + event forwarder**
-(#121) so containers can reach the model provider, and network isolation.
+### Off-box orchestrator (Docker)
+
+Run the orchestrator as a plain Node container (`node` + `git` + `openssh-client`); the
+`nix develop` shell is only for development. Build/run with `orchestrator/Dockerfile` and
+configure entirely via `FLEET_*` env. Off-box, the orchestrator reaches each container's
+host-private `:4096` through an **SSH tunnel** to `FLEET_SSH_HOST` (no tunnel is used when
+`FLEET_SSH_HOST` is unset and the orchestrator is co-located). Mount the fleet host's SSH key
+and a clone of the target repo.
+
+Still required before a full unattended run: the host-side **egress** for containers to reach
+the model provider (#121) and network isolation.
 
 
 ## 8. Verify
