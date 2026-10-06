@@ -1,5 +1,6 @@
 import { canonicalJson, sha256Hex } from "./canonical.ts";
 import { BOARD_READ_RULES, HARD_DENY_RULES, ROLE_POLICIES } from "./policy.ts";
+import { promptReference } from "../agents/prompts.ts";
 import {
   CapabilityError,
   type CapabilityRequest,
@@ -144,6 +145,7 @@ export function compile(
     [request.role]: {
       description: `${request.role} agent`,
       mode: "primary" as const,
+      prompt: promptReference(request.role),
       permission,
     },
   };

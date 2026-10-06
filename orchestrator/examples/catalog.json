@@ -1,0 +1,26 @@
+{
+  "servers": {
+    "kanban": {
+      "type": "remote",
+      "url": "http://orchestrator.internal/mcp",
+      "toolPrefix": "kanban",
+      "tools": [
+        "kanban_get_board",
+        "kanban_list_boards",
+        "kanban_move_task",
+        "kanban_update_task"
+      ],
+      "denyTools": ["kanban_move_task", "kanban_update_task"],
+      "credential": { "provider": "kanban", "scopes": ["boards:read"] },
+      "egress": ["orchestrator.internal"]
+    },
+    "github": {
+      "type": "local",
+      "command": ["github-mcp"],
+      "toolPrefix": "github",
+      "tools": ["github_get_pr", "github_create_comment"],
+      "credential": { "provider": "github", "scopes": ["repo:read"] },
+      "egress": ["api.github.com"]
+    }
+  }
+}

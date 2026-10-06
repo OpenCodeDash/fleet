@@ -63,7 +63,7 @@ export interface CompiledCapabilities {
   config: {
     mcp: Record<string, unknown>;
     permission: Permission;
-    agent: Record<string, { description: string; mode: "primary"; permission: Permission }>;
+    agent: Record<string, { description: string; mode: "primary"; prompt: string; permission: Permission }>;
   };
   credentials: CredentialRequirement[];
   egress: string[];

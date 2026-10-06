@@ -15,6 +15,7 @@ Paths marked **(TBD)** do not exist yet.
 | Capability compiler | `./orchestrator/src/capability/` | `(task, role) -> { mcp, permission, creds }`, deterministic + hashable |
 | Egress proxy | `./orchestrator/src/egress/` | Default-deny HTTP(S) proxy enforcing the per-container allowlist |
 | Event sink | `./orchestrator/src/observability/` | Streams `/event` + stderr + lifecycle into redacted durable storage |
+| Agent configs | `./orchestrator/src/agents/` | Role prompts + config files; repo capability manifest parser |
 
 ## Data flow
 

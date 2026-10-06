@@ -1,0 +1,3 @@
+{
+  "grants": [{ "mcp": "kanban" }, { "mcp": "github", "tools": ["github_get_pr"] }]
+}
