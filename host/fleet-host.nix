@@ -10,6 +10,9 @@
   system.stateVersion = "25.11";
   networking.hostName = "fleet-host";
 
+  # Flakes + the new `nix` CLI on the host.
+  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+
   # Machine-specific disk layout. Regenerate on the target with
   # `nixos-generate-config --root /mnt` and replace host/hardware-configuration.nix
   # (or swap this for a disko config). See docs/setup.md.
@@ -29,6 +32,8 @@
   # from the host at http://<machine-name>:4096 with no per-interface config here.
   networking.useNetworkd = true;
   networking.firewall.enable = true;
+  # The off-box orchestrator connects over SSH; this is the only inbound port.
+  networking.firewall.allowedTCPPorts = [ 22 ];
 
   # Uplink DHCP — the nspawn zone only serves the containers themselves, so the host's own
   # NIC needs an address to reach the board, git and the Nix cache. `en*`/`eth*` covers
