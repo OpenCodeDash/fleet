@@ -33,5 +33,18 @@
         inherit system;
         modules = [ self.nixosModules.fleet-agent ];
       };
+
+      # The dedicated host that runs those containers. It pins the container system so the
+      # host store already contains it.
+      nixosConfigurations.fleet-host = nixpkgs.lib.nixosSystem {
+        inherit system;
+        specialArgs = {
+          fleetContainer = self.nixosConfigurations.fleet-agent.config.system.build.toplevel;
+        };
+        modules = [ ./host/fleet-host.nix ];
+      };
+
+      # A runnable QEMU VM of the host, for local development.
+      packages.${system}.fleet-host-vm = self.nixosConfigurations.fleet-host.config.system.build.vm;
     };
 }

@@ -12,6 +12,7 @@ Paths marked **(TBD)** do not exist yet.
 | ---- | ----- | -------------- |
 | Orchestrator (control plane) | `./orchestrator/` | Config loader, capability compiler, board client, credential broker, provisioner, control loop, scheduler, crash-recovery reconciler implemented |
 | Container image (data plane) | `./image/` | NixOS container module + `nixosConfigurations.fleet-agent`; boots `opencode serve` |
+| Host (data-plane substrate) | `./host/` | `nixosConfigurations.fleet-host`: nspawn containers, networkd zone, container system prebuilt |
 | Capability compiler | `./orchestrator/src/capability/` | `(task, role) -> { mcp, permission, creds }`, deterministic + hashable |
 | Egress proxy | `./orchestrator/src/egress/` | Default-deny HTTP(S) proxy enforcing the per-container allowlist |
 | Event sink | `./orchestrator/src/observability/` | Streams `/event` + stderr + lifecycle into redacted durable storage |

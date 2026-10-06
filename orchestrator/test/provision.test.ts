@@ -84,7 +84,7 @@ test("nspawn args: ephemeral rootfs, read-only config bind, machine + system", (
   assert.ok(args.includes("--machine=fleet-1"));
   assert.ok(args.includes(`--directory=${spec.systemPath}`));
   assert.ok(args.includes(`--bind-ro=${spec.configDir}:/etc/fleet/opencode`));
-  assert.ok(args.includes("--network-veth"));
+  assert.ok(args.includes("--network-zone=fleet"));
   assert.ok(args.includes(`${spec.systemPath}/init`));
 });
 
