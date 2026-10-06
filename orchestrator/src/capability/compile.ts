@@ -152,8 +152,10 @@ export function compile(
   const config = { mcp, permission, agent };
 
   // Conservative: any available bash makes tool gating advisory (auto-approve may be on),
-  // so the set is "soft" and must be paired with enforced egress.
-  const soft = permission.bash !== "deny";
+  // so the set is "soft" and must be paired with enforced egress. `undefined` bash is
+  // denied by the default-deny rule, so it is not soft.
+  const bash = permission.bash;
+  const soft = bash !== undefined && bash !== "deny";
 
   const egressList = [...egress].sort();
   const capabilityHash = sha256Hex(

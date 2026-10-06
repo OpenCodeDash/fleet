@@ -43,7 +43,15 @@ export class BoardClient {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const text = await response.text();
-    const data: unknown = text.length > 0 ? JSON.parse(text) : null;
+    let data: unknown = null;
+    if (text.length > 0) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        // a non-JSON body (e.g. an HTML error page) must not mask the HTTP status
+        data = text;
+      }
+    }
     if (!response.ok) {
       const message =
         data !== null && typeof data === "object" && "message" in data && data.message

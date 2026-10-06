@@ -155,3 +155,12 @@ test("helpers look up columns and tasks by name/id", () => {
   assert.equal(findTask(board, 1)?.column.name, "Todo");
   assert.equal(findTask(board, 999), undefined);
 });
+
+test("maps a non-JSON error body to a BoardError with the HTTP status", async () => {
+  const impl = (async () => new Response("<html>oops</html>", { status: 500 })) as typeof fetch;
+  const client = new BoardClient({ url: "http://board:3000", fetchImpl: impl });
+  await assert.rejects(
+    () => client.getBoard("b1"),
+    (error: unknown) => error instanceof BoardError && (error as BoardError).status === 500,
+  );
+});
