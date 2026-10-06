@@ -8,6 +8,7 @@ import { CommandGitVerifier } from "./git/index.ts";
 import { NodeExecutor, SshCommandRunner } from "./remote/index.ts";
 import { NixosContainerBackend } from "./provision/backend.ts";
 import { ContainerProvisioner } from "./provision/provisioner.ts";
+import type { CommandRunner } from "./provision/types.ts";
 import { OpencodeAgentRunner } from "./agents/index.ts";
 import { EventSink, JsonlEventStore } from "./observability/index.ts";
 import { TaskLoop } from "./loop/loop.ts";
@@ -21,7 +22,7 @@ export interface RuntimeOptions {
   boardId: string;
   /** Bearer token for the board API when it is locked down. */
   boardToken?: string;
-  sshHost: string;
+  sshHost?: string;
   sshUser?: string;
   repoDir: string;
   modulePath: string;
@@ -55,15 +56,16 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       ? {}
       : { headers: { authorization: `Bearer ${options.boardToken}` } }),
   });
-  const ssh = new SshCommandRunner({
-    host: options.sshHost,
-    user: options.sshUser,
-    executor: new NodeExecutor(),
-  });
-  const provisioner = new ContainerProvisioner(new NixosContainerBackend(ssh));
-  // The repo clone lives on the orchestrator box, so git verification runs locally, not
-  // over SSH to the host.
-  const git = new CommandGitVerifier({ repoDir: options.repoDir, runner: new NodeExecutor() });
+  const localExecutor = new NodeExecutor();
+  // When no SSH host is configured the orchestrator runs commands locally (co-located with
+  // the container host); otherwise it drives nixos-container over SSH.
+  const commandRunner: CommandRunner =
+    options.sshHost === undefined || options.sshHost.length === 0
+      ? localExecutor
+      : new SshCommandRunner({ host: options.sshHost, user: options.sshUser, executor: localExecutor });
+  const provisioner = new ContainerProvisioner(new NixosContainerBackend(commandRunner));
+  // The repo clone lives next to the orchestrator, so git verification runs locally.
+  const git = new CommandGitVerifier({ repoDir: options.repoDir, runner: localExecutor });
   const agentRunner = new OpencodeAgentRunner({ model: options.model, agent: options.agent });
   const broker = new CredentialBroker({
     providers: envCredentialProviders(providerNames(catalog), options.env),
@@ -125,7 +127,7 @@ export function runtimeOptionsFromEnv(
     boardUrl: required(env, "FLEET_BOARD_URL"),
     boardId: required(env, "FLEET_BOARD_ID"),
     boardToken: env.FLEET_BOARD_TOKEN,
-    sshHost: required(env, "FLEET_SSH_HOST"),
+    sshHost: env.FLEET_SSH_HOST,
     sshUser: env.FLEET_SSH_USER,
     repoDir: required(env, "FLEET_REPO_DIR"),
     modulePath: env.FLEET_MODULE_PATH ?? "/etc/nixos/image/fleet-agent.nix",
