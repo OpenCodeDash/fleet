@@ -38,7 +38,7 @@ Overridable — see [configuration.md](configuration.md):
 
 - nspawn network config: veth whose only gateway is the proxy.
 - The proxy is the sole egress path and logs connections per container.
-- A `soft` capability set (one with unrestricted `bash`) MUST have egress enforced — this is
+- A `soft` capability set (one that allows bash at all) MUST have egress enforced — this is
   the [capability-compiler](capability-compiler.md) invariant that makes tool gating
   meaningful.
 

@@ -71,24 +71,17 @@ export interface LoadOptions {
   cli?: Raw;
 }
 
-interface SectionSpec {
-  [key: string]: "string" | "boolean" | "integer" | "duration" | "string[]" | "deny-mode";
-}
-
-const SCHEMA: Record<string, SectionSpec> = {
-  credentials: { ttl: "duration", revokeOnDestroy: "boolean" },
-  egress: { mode: "deny-mode", allow: "string[]", proxy: "string" },
-  review: { maxRounds: "integer" },
-  provision: { retries: "integer" },
-  verify: { retries: "integer" },
-  run: { idleTimeout: "duration" },
-  task: { budget: "duration" },
-  limits: {
-    maxContainers: "integer",
-    providerConcurrency: "integer",
-    mcpConcurrency: "integer",
-  },
-  observability: { flushTimeout: "duration", retention: "duration" },
+/** Allowed keys per section. Each key's type is validated explicitly in `assertValid`. */
+const SECTION_KEYS: Record<string, string[]> = {
+  credentials: ["ttl", "revokeOnDestroy"],
+  egress: ["mode", "allow", "proxy"],
+  review: ["maxRounds"],
+  provision: ["retries"],
+  verify: ["retries"],
+  run: ["idleTimeout"],
+  task: ["budget"],
+  limits: ["maxContainers", "providerConcurrency", "mcpConcurrency"],
+  observability: ["flushTimeout", "retention"],
 };
 
 function isPlainObject(value: unknown): value is Raw {
@@ -198,19 +191,15 @@ function assertStringArray(value: unknown, path: string): string[] {
 }
 
 function assertValid(raw: Raw): Config {
-  assertKeys(
-    raw,
-    ["credentials", "egress", "review", "provision", "verify", "run", "task", "limits", "observability"],
-    "",
-  );
+  assertKeys(raw, Object.keys(SECTION_KEYS), "");
 
   const credentials = assertSection(raw, "credentials");
-  assertKeys(credentials, Object.keys(SCHEMA.credentials as SectionSpec), "credentials");
+  assertKeys(credentials, SECTION_KEYS.credentials, "credentials");
   assertDuration(credentials.ttl, "credentials.ttl");
   assertBool(credentials.revokeOnDestroy, "credentials.revokeOnDestroy");
 
   const egress = assertSection(raw, "egress");
-  assertKeys(egress, Object.keys(SCHEMA.egress as SectionSpec), "egress");
+  assertKeys(egress, SECTION_KEYS.egress, "egress");
   const mode = assertString(egress.mode, "egress.mode");
   if (mode !== "deny") {
     fail(
@@ -223,33 +212,33 @@ function assertValid(raw: Raw): Config {
   if (proxy.length === 0) fail("egress.proxy", "is required");
 
   const review = assertSection(raw, "review");
-  assertKeys(review, Object.keys(SCHEMA.review as SectionSpec), "review");
+  assertKeys(review, SECTION_KEYS.review, "review");
   assertInteger(review.maxRounds, "review.maxRounds", 1);
 
   const provision = assertSection(raw, "provision");
-  assertKeys(provision, Object.keys(SCHEMA.provision as SectionSpec), "provision");
+  assertKeys(provision, SECTION_KEYS.provision, "provision");
   assertInteger(provision.retries, "provision.retries", 0);
 
   const verify = assertSection(raw, "verify");
-  assertKeys(verify, Object.keys(SCHEMA.verify as SectionSpec), "verify");
+  assertKeys(verify, SECTION_KEYS.verify, "verify");
   assertInteger(verify.retries, "verify.retries", 0);
 
   const run = assertSection(raw, "run");
-  assertKeys(run, Object.keys(SCHEMA.run as SectionSpec), "run");
+  assertKeys(run, SECTION_KEYS.run, "run");
   assertDuration(run.idleTimeout, "run.idleTimeout");
 
   const task = assertSection(raw, "task");
-  assertKeys(task, Object.keys(SCHEMA.task as SectionSpec), "task");
+  assertKeys(task, SECTION_KEYS.task, "task");
   assertDuration(task.budget, "task.budget");
 
   const limits = assertSection(raw, "limits");
-  assertKeys(limits, Object.keys(SCHEMA.limits as SectionSpec), "limits");
+  assertKeys(limits, SECTION_KEYS.limits, "limits");
   assertInteger(limits.maxContainers, "limits.maxContainers", 1);
   assertInteger(limits.providerConcurrency, "limits.providerConcurrency", 1);
   assertInteger(limits.mcpConcurrency, "limits.mcpConcurrency", 1);
 
   const observability = assertSection(raw, "observability");
-  assertKeys(observability, Object.keys(SCHEMA.observability as SectionSpec), "observability");
+  assertKeys(observability, SECTION_KEYS.observability, "observability");
   assertDuration(observability.flushTimeout, "observability.flushTimeout");
   assertDuration(observability.retention, "observability.retention");
 

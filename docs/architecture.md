@@ -6,13 +6,13 @@ state lives outside containers, in git and the kanban board.
 
 ## Modules / boundaries
 
-Paths marked **(TBD)** do not exist yet — this is design phase.
+Paths marked **(TBD)** do not exist yet.
 
 | Area | Where | Responsibility |
 | ---- | ----- | -------------- |
-| Orchestrator (control plane) | `./orchestrator/` (TBD) | Compile capabilities, provision containers, drive sessions, stream events, tear down |
+| Orchestrator (control plane) | `./orchestrator/` | Config loader + capability compiler implemented; control loop, provisioner, event sink TBD |
 | Container image (data plane) | `./image/` (TBD) | NixOS closure + `opencode`; boots `opencode serve` |
-| Capability compiler | `./orchestrator/` (TBD) | `(task, role) -> { mcp, permission, creds }`, deterministic + hashable |
+| Capability compiler | `./orchestrator/src/capability/` | `(task, role) -> { mcp, permission, creds }`, deterministic + hashable |
 
 ## Data flow
 

@@ -36,8 +36,8 @@ test("grants a server and allows its tools while denying its write tools", () =>
   const compiled = compile(request(), catalog);
   assert.ok(compiled.config.mcp.kanban);
   assert.equal(compiled.config.permission["kanban_*"], "allow");
-  assert.equal(compiled.config.permission["kanban_move_task"], "deny");
-  assert.equal(compiled.config.permission["kanban_update_task"], "deny");
+  assert.equal(compiled.config.permission.kanban_move_task, "deny");
+  assert.equal(compiled.config.permission.kanban_update_task, "deny");
 });
 
 test("default-deny: unrequested MCP servers are absent", () => {
@@ -128,7 +128,7 @@ test("fails closed on duplicate grants", () => {
 
 test("explicit tool subset allows only the named tools", () => {
   const compiled = compile(request({ grants: [{ mcp: "github", tools: ["github_get_pr"] }] }), catalog);
-  assert.equal(compiled.config.permission["github_get_pr"], "allow");
+  assert.equal(compiled.config.permission.github_get_pr, "allow");
   assert.equal(compiled.config.permission["github_*"], undefined);
-  assert.equal(compiled.config.permission["github_create_pr"], undefined);
+  assert.equal(compiled.config.permission.github_create_pr, undefined);
 });

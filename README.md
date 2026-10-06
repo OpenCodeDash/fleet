@@ -22,4 +22,5 @@ Durable state lives only in the **git remote** and the **kanban board**.
 nix develop
 ```
 
-Status: design phase — scaffold only.
+Status: early implementation — design docs live in `docs/`; work is tracked on the kanban
+board.

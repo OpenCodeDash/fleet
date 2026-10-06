@@ -30,4 +30,5 @@ Always true:
 - `./docs` is the design source of truth. Update a doc in the same change that changes the
   behavior it describes; if it is stale, fix or delete it. A stale doc is worse than none.
 
-Status: design phase — scaffold only.
+Status: early implementation. `./docs` still describes the full intended design; code lands
+incrementally — check the board for what exists yet.

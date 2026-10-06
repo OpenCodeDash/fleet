@@ -26,7 +26,7 @@ type Grant = {
 }
 
 type CompiledCapabilities = {
-  capabilityHash: string                  // sha256 of canonical config + policyVersion
+  capabilityHash: string                  // sha256 of the canonical compiled set + policyVersion
   config: OpenCodeConfigFragment          // { mcp, permission, agent }
   credentials: CredentialRequirement[]    // refs only, never secrets
   audit: AuditManifest
@@ -50,18 +50,21 @@ Merged to a flat permission tree with `"*": "deny"` first, then allows, then har
 
 ## Output pieces
 
-- `config.mcp` — only the selected servers, each `enabled: true`.
+- `config.mcp` — only the selected servers, each `enabled: true`. A server's write tools
+  must be listed in its catalog entry's `denyTools`, or a default grant (`prefix_*`)
+  exposes them.
 - `config.permission` — default-deny tree; wildcard patterns for MCP tools (`"kanban_*"`),
   bash command globs, and `task` gates.
 - `config.agent` — one primary agent per role, with the role prompt + permission overrides.
-- `credentials` — declarative requirements `{ provider, scopes, ttl }`, resolved by the broker.
+- `credentials` — declarative requirements `{ provider, scopes }`; the broker supplies the TTL.
 - `audit` — `{ capabilityHash, taskId, role, policyVersion, mcp[], grantPatterns[],
   denyPatterns[], credentialRefs[] }`.
 
 ## Determinism
 
 - Canonicalize before hashing: recursively sort object keys, sort arrays, drop volatile
-  fields, fixed separators. Hash = SHA-256 over canonical JSON **plus `policyVersion`**.
+  fields, fixed separators. Hash = SHA-256 over canonical JSON of
+  `{ policyVersion, config, credentials, egress }`.
 - No secrets, timestamps, hostnames, or container ids enter the hashed input.
 - The hash is the capability-set id recorded in the audit manifest and on the task.
 
@@ -71,10 +74,11 @@ Merged to a flat permission tree with `"*": "deny"` first, then allows, then har
 - **Fail closed** on any unknown MCP, unknown tool pattern, or catalog entry missing a tool
   prefix. Never silently drop a requested capability.
 - Hard denials always win, including over grants: `task` (subagent escape),
-  `external_directory`, and `webfetch`/`websearch` unless explicitly granted.
-- `bash` is flagged: a set with unrestricted `bash` is marked `soft` (tool gating is
-  advisory only, because bash reaches anything). The orchestrator MUST pair `soft` sets
-  with network egress enforcement.
+  `external_directory`, and `webfetch`/`websearch` (always denied — there is no grant path
+  for built-in tools).
+- `bash` is flagged: any set that allows bash **at all** is marked `soft` — with
+  auto-approve an `ask` becomes an effective allow, so tool gating is advisory. The
+  orchestrator MUST pair `soft` sets with network egress enforcement.
 - The compiler never sees or emits secrets.
 
 ## Enforcement split: permissions vs credentials
@@ -96,7 +100,7 @@ Built-in defaults (overridable per repo, **except** merge rights — reviewer-on
 | `edit` / `write` / `apply_patch` | allow | **deny** |
 | `bash` | `"*": ask`; allow `git commit *`, `git push origin feat/*`, test/build commands | `"*": ask`; allow test/build commands, `git merge`, `git push origin main` |
 | `task` (subagents) | deny | deny |
-| `webfetch` / `websearch` | deny unless granted | deny unless granted |
+| `webfetch` / `websearch` | deny (always) | deny (always) |
 | `external_directory` | deny | deny |
 | board reads (`kanban_get_*`, `kanban_list_*`) | allow | allow |
 | board writes (`kanban_move_task`, `kanban_update_task`, create/delete) | **deny** | **deny** |
@@ -129,7 +133,9 @@ allowed to touch. Both are needed — neither alone enforces the role.
 | Credential mint failure (broker) | abort provision; requeue task |
 | Non-canonical ordering | impossible — canonicalization step |
 
-## Testing (when implemented)
+## Testing
+
+Implemented in `orchestrator/test/capability.test.ts`:
 
 - Determinism: identical inputs → identical `capabilityHash` (property test).
 - Fail-closed: unknown MCP / pattern throws.
