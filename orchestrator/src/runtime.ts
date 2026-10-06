@@ -94,7 +94,11 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     ...(options.repoDir === undefined ? {} : { repoDir: options.repoDir }),
     runner: localExecutor,
   });
-  const agentRunner = new OpencodeAgentRunner({ model: options.model, agent: options.agent });
+  const agentRunner = new OpencodeAgentRunner({
+    model: options.model,
+    agent: options.agent,
+    ...(options.onProgress === undefined ? {} : { log: options.onProgress }),
+  });
   const broker = new CredentialBroker({
     providers: envCredentialProviders(providerNames(catalog), options.env),
     ttl: options.config.credentials.ttl,

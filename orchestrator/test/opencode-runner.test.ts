@@ -153,6 +153,18 @@ test("throws AgentError when structured output is missing or invalid", async () 
   );
 });
 
+test("streams agent events to the log", async () => {
+  const logged: string[] = [];
+  const sse =
+    'data: {"type":"message.part.updated","properties":{"tool":"bash"}}\n\n' +
+    'data: {"type":"session.idle","properties":{}}\n\n';
+  const impl = (async () => new Response(sse, { status: 200 })) as FetchLike;
+  const runner = new OpencodeAgentRunner({ fetchImpl: impl, log: (m) => logged.push(m) });
+  await runner.streamEvents("http://x", new AbortController().signal);
+  assert.ok(logged.some((m) => /agent message\.part\.updated tool=bash/.test(m)));
+  assert.ok(logged.some((m) => /agent session\.idle/.test(m)));
+});
+
 test("parse helpers validate their fields", () => {
   assert.deepEqual(parseAuthorResult(AUTHOR), AUTHOR);
   assert.deepEqual(parseReviewerResult(REVIEWER), REVIEWER);

@@ -1,5 +1,6 @@
 import type { AgentRunInput, AuthorResult, CompletionResult, ReviewerResult } from "../loop/types.ts";
 import type { FetchLike } from "../provision/types.ts";
+import { SseParser, type SseFrame } from "../observability/index.ts";
 
 export class AgentError extends Error {
   constructor(message: string) {
@@ -42,6 +43,24 @@ export interface OpencodeAgentRunnerOptions {
   model?: { providerID: string; modelID: string };
   /** opencode agent name to run (optional; defaults to the server default). */
   agent?: string;
+  /** Receives a line per container event (tool calls, steps) — for live CLI output. */
+  log?: (message: string) => void;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** A short, readable summary of an event's `properties` (tool/name/status). */
+function summarizeEvent(data: unknown): string {
+  if (!isRecord(data) || !isRecord(data.properties)) return "";
+  const properties = data.properties;
+  const bits: string[] = [];
+  for (const key of ["tool", "name", "status", "reason"]) {
+    const value = properties[key];
+    if (typeof value === "string" && value.length > 0) bits.push(`${key}=${value}`);
+  }
+  return bits.length > 0 ? ` ${bits.join(" ")}` : "";
 }
 
 function asRecord(value: unknown, what: string): Record<string, unknown> {
@@ -130,11 +149,44 @@ export class OpencodeAgentRunner {
   private readonly fetchImpl: FetchLike;
   private readonly model: { providerID: string; modelID: string } | undefined;
   private readonly agent: string | undefined;
+  private readonly log: ((message: string) => void) | undefined;
 
   constructor(options: OpencodeAgentRunnerOptions = {}) {
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.model = options.model;
     this.agent = options.agent;
+    this.log = options.log;
+  }
+
+  /** Stream the container's `/event` SSE, logging a line per frame. Ends on abort/close. */
+  async streamEvents(address: string, signal: AbortSignal): Promise<void> {
+    if (this.log === undefined) return;
+    try {
+      const response = await this.fetchImpl(`${address}/event`, {
+        headers: { accept: "text/event-stream" },
+        signal,
+      });
+      if (!response.ok || response.body === null) return;
+      const parser = new SseParser();
+      const decoder = new TextDecoder();
+      for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
+        const text = typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
+        for (const frame of parser.push(text)) this.emit(frame);
+      }
+    } catch {
+      // stream ended / aborted / tunnel closed — non-fatal
+    }
+  }
+
+  private emit(frame: SseFrame): void {
+    let data: unknown = frame.data;
+    try {
+      data = JSON.parse(frame.data);
+    } catch {
+      // leave as a raw string
+    }
+    const type = isRecord(data) && typeof data.type === "string" ? data.type : (frame.event ?? "event");
+    this.log?.(`agent ${type}${summarizeEvent(data)}`);
   }
 
   async run(input: AgentRunInput): Promise<CompletionResult> {
@@ -154,17 +206,24 @@ export class OpencodeAgentRunner {
     if (this.agent !== undefined) body.agent = this.agent;
     if (this.model !== undefined) body.model = this.model;
 
-    const message = await this.post(`${input.address}/session/${sessionId}/message`, body);
-    const structured = extractStructured(message);
-    await input.sink.record({
-      source: "lifecycle",
-      type: "agent-result",
-      data: { role: input.role, structured },
-    });
+    // Stream the container's events while the turn runs (best-effort, for live output).
+    const abort = new AbortController();
+    void this.streamEvents(input.address, abort.signal);
+    try {
+      const message = await this.post(`${input.address}/session/${sessionId}/message`, body);
+      const structured = extractStructured(message);
+      await input.sink.record({
+        source: "lifecycle",
+        type: "agent-result",
+        data: { role: input.role, structured },
+      });
 
-    return input.role === "author"
-      ? { kind: "author", result: parseAuthorResult(structured) }
-      : { kind: "reviewer", result: parseReviewerResult(structured) };
+      return input.role === "author"
+        ? { kind: "author", result: parseAuthorResult(structured) }
+        : { kind: "reviewer", result: parseReviewerResult(structured) };
+    } finally {
+      abort.abort();
+    }
   }
 
   private async post(url: string, body: unknown): Promise<unknown> {
