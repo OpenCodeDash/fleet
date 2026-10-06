@@ -24,6 +24,8 @@ export interface RuntimeOptions {
   boardToken?: string;
   sshHost?: string;
   sshUser?: string;
+  /** Path to the SSH private key for the fleet host (else ssh uses its defaults). */
+  sshKey?: string;
   /** Git remote URL agents clone/push and the verifier checks (e.g. the repo URL). */
   repo: string;
   /** Local clone; only needed for the reviewer's ancestry check. */
@@ -65,12 +67,20 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   // container's host-private port through an SSH tunnel.
   const remote = options.sshHost !== undefined && options.sshHost.length > 0;
   const sshHost = options.sshHost ?? "";
+  const sshExtraArgs =
+    options.sshKey === undefined ? [] : ["-i", options.sshKey, "-o", "IdentitiesOnly=yes"];
   const commandRunner: CommandRunner = remote
-    ? new SshCommandRunner({ host: sshHost, user: options.sshUser, executor: localExecutor })
+    ? new SshCommandRunner({
+        host: sshHost,
+        user: options.sshUser,
+        extraArgs: sshExtraArgs,
+        executor: localExecutor,
+      })
     : localExecutor;
   const tunnel = remote
     ? makeSshTunnelFactory({
         target: options.sshUser === undefined ? sshHost : `${options.sshUser}@${sshHost}`,
+        extraArgs: sshExtraArgs,
       })
     : undefined;
   const provisioner = new ContainerProvisioner(
@@ -145,6 +155,7 @@ export function runtimeOptionsFromEnv(
     boardToken: env.FLEET_BOARD_TOKEN,
     sshHost: env.FLEET_SSH_HOST,
     sshUser: env.FLEET_SSH_USER,
+    sshKey: env.FLEET_SSH_KEY,
     repo: required(env, "FLEET_REPO"),
     repoDir: env.FLEET_REPO_DIR,
     modulePath: env.FLEET_MODULE_PATH ?? "/etc/nixos/image/fleet-agent.nix",
