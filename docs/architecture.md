@@ -11,7 +11,7 @@ Paths marked **(TBD)** do not exist yet.
 | Area | Where | Responsibility |
 | ---- | ----- | -------------- |
 | Orchestrator (control plane) | `./orchestrator/` | Config loader, capability compiler, board client, credential broker implemented; control loop, provisioner, event sink TBD |
-| Container image (data plane) | `./image/` (TBD) | NixOS closure + `opencode`; boots `opencode serve` |
+| Container image (data plane) | `./image/` | NixOS container module + `nixosConfigurations.fleet-agent`; boots `opencode serve` |
 | Capability compiler | `./orchestrator/src/capability/` | `(task, role) -> { mcp, permission, creds }`, deterministic + hashable |
 
 ## Data flow

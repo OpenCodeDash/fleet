@@ -9,6 +9,7 @@ git, opencode).
 | ------ | ------- |
 | Dev shell | `nix develop` |
 | Evaluate / verify flake | `nix flake check --no-build` |
+| Build the agent container system | `nix build .#nixosConfigurations.fleet-agent.config.system.build.toplevel` |
 | Show pinned inputs | `nix flake metadata` |
 
 ## Orchestrator (`orchestrator/`)

@@ -23,5 +23,15 @@
           echo "  opencode: $(opencode --version 2>/dev/null || echo 'n/a')"
         '';
       };
+
+      # Reusable NixOS container definition for a single agent.
+      nixosModules.fleet-agent = import ./image/fleet-agent.nix;
+
+      # Concrete instantiation the provisioner boots as an ephemeral systemd-nspawn
+      # container. See docs/architecture.md and ADR 0001.
+      nixosConfigurations.fleet-agent = nixpkgs.lib.nixosSystem {
+        inherit system;
+        modules = [ self.nixosModules.fleet-agent ];
+      };
     };
 }
