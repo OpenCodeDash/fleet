@@ -30,6 +30,14 @@
   networking.useNetworkd = true;
   networking.firewall.enable = true;
 
+  # Uplink DHCP — the nspawn zone only serves the containers themselves, so the host's own
+  # NIC needs an address to reach the board, git and the Nix cache. `en*`/`eth*` covers
+  # Proxmox/typical NIC names; the zone bridge (vz-*) and container veths (vb-*) are not matched.
+  systemd.network.networks."10-uplink" = {
+    matchConfig.Name = [ "en*" "eth*" ];
+    networkConfig.DHCP = "yes";
+  };
+
   # Keep the agent container system in the host store, so provisioning needs no build on
   # the host at container-start time.
   system.extraDependencies = [ fleetContainer ];
