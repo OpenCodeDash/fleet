@@ -21,7 +21,7 @@ propose a result; the orchestrator validates and commits the transition. See
 | `COLLECTING` | Flushing events, storing audit |
 | `DESTROYING` | Tearing the container down |
 | `DONE` | Terminal success |
-| `FAILED` | Terminal; task requeued or escalated |
+| `FAILED` | Terminal for the attempt; the task is requeued or escalated |
 
 ## Transitions
 
@@ -70,16 +70,6 @@ The orchestrator is the **sole writer** of board state (create / move / update).
 read-only board tools; the capability compiler denies `kanban_move_task`,
 `kanban_update_task`, and the create/delete tools. Notes and summaries are written by the
 orchestrator from the agent's structured result.
-
-## Timeouts, retries, escalation
-
-| Condition | Action |
-| --------- | ------ |
-| Provision timeout | Destroy; retry ≤ N; then `Need Help` |
-| No event for `idleTimeout` | Nudge; then abort → destroy → requeue |
-| Overall task budget exceeded | Destroy; `Need Help` |
-| Verification fails | Retry prompt (bounded); then `Need Help` |
-| Container exits unexpectedly | Destroy; requeue |
 
 ## Failure semantics
 

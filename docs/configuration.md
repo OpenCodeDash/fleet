@@ -25,22 +25,24 @@ A value that would loosen a floor is rejected at startup, not silently clamps.
 
 | Key | Default | Meaning | Detail |
 | --- | ------- | ------- | ------ |
-| `roles.*` | (built-in) | per-role permission/credential policy | [capability-compiler.md](capability-compiler.md#role-base-policies) |
 | `credentials.ttl` | `1h` | minted token lifetime | [credentials.md](credentials.md) |
 | `credentials.revokeOnDestroy` | `true` | revoke tokens at teardown | [credentials.md](credentials.md) |
 | `egress.mode` | `deny` | default-deny; `allow` is a floor violation | [egress.md](egress.md) |
 | `egress.allow` | `[]` | extra allowlist hosts (on top of orchestrator + granted MCPs) | [egress.md](egress.md) |
 | `egress.proxy` | required | HTTP(S) proxy that enforces the allowlist | [egress.md](egress.md) |
 | `review.maxRounds` | `3` | review iterations before `Need Help` | [handoff.md](handoff.md#iteration-bound) |
-| `provision.retries` | `2` | provision attempts before `Need Help` | [orchestrator.md](orchestrator.md#timeouts-retries-escalation) |
-| `verify.retries` | `2` | handoff re-validations before `Need Help` | [orchestrator.md](orchestrator.md#timeouts-retries-escalation) |
-| `run.idleTimeout` | `10m` | no-event window before nudge, then abort | [orchestrator.md](orchestrator.md#timeouts-retries-escalation) |
-| `task.budget` | `60m` | wall-clock cap per task | [orchestrator.md](orchestrator.md#timeouts-retries-escalation) |
+| `provision.retries` | `2` | provision attempts before `Need Help` | [orchestrator.md](orchestrator.md#failure-semantics) |
+| `verify.retries` | `2` | handoff re-validations before `Need Help` | [orchestrator.md](orchestrator.md#failure-semantics) |
+| `run.idleTimeout` | `10m` | no-event window before nudge, then abort | [orchestrator.md](orchestrator.md#failure-semantics) |
+| `task.budget` | `60m` | wall-clock cap per task | [orchestrator.md](orchestrator.md#failure-semantics) |
 | `limits.maxContainers` | `10` | concurrent containers | [limiters.md](limiters.md) |
 | `limits.providerConcurrency` | `4` | concurrent LLM calls per provider | [limiters.md](limiters.md) |
 | `limits.mcpConcurrency` | `5` | concurrent calls per MCP endpoint | [limiters.md](limiters.md) |
 | `observability.flushTimeout` | `30s` | max wait to flush events before destroy | [observability.md](observability.md) |
 | `observability.retention` | `30d` | event/audit retention | [observability.md](observability.md) |
+
+Role policies are **not** config keys — they live in the
+[capability compiler](capability-compiler.md#role-base-policies).
 
 ## Per-repo manifest vs orchestrator config
 

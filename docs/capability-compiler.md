@@ -29,6 +29,8 @@ type CompiledCapabilities = {
   capabilityHash: string                  // sha256 of the canonical compiled set + policyVersion
   config: OpenCodeConfigFragment          // { mcp, permission, agent }
   credentials: CredentialRequirement[]    // refs only, never secrets
+  egress: string[]                        // hosts the granted servers need
+  soft: boolean                           // bash available → egress must be enforced
   audit: AuditManifest
 }
 
@@ -98,7 +100,7 @@ Built-in defaults (overridable per repo, **except** merge rights — reviewer-on
 | ---------- | ------ | -------- |
 | `read` / `glob` / `grep` / `list` | allow | allow |
 | `edit` / `write` / `apply_patch` | allow | **deny** |
-| `bash` | `"*": ask`; allow `git commit *`, `git push origin feat/*`, test/build commands | `"*": ask`; allow test/build commands, `git merge`, `git push origin main` |
+| `bash` | `"*": ask`; allow `git status`, `git diff *`, `git add *`, `git commit *`, `git push *`, `npm test`, `npm run *`, `nix *` | `"*": ask`; allow `git merge *`, `git push *`, `npm test`, `npm run *`, `nix *` |
 | `task` (subagents) | deny | deny |
 | `webfetch` / `websearch` | deny (always) | deny (always) |
 | `external_directory` | deny | deny |

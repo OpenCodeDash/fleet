@@ -8,7 +8,8 @@ secrets); the broker mints the actual tokens at provision and revokes them at de
 
 ## Separation of concerns
 
-- **Compiler** — pure; emits `{ provider, scopes, ttl }` requirements; never sees secrets.
+- **Compiler** — pure; emits `{ provider, scopes }` requirements (the broker supplies the
+  TTL); never sees secrets.
 - **Broker** — side-effecting; mints, injects, and revokes. Secrets live only in the broker
   and the container's env/credential — never in config, the capability hash, or events.
 
