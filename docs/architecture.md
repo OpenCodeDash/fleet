@@ -18,6 +18,7 @@ Paths marked **(TBD)** do not exist yet.
 | Event sink | `./orchestrator/src/observability/` | Streams `/event` + stderr + lifecycle into redacted durable storage |
 | Agent configs | `./orchestrator/src/agents/` | Role prompts + config files; repo capability manifest parser |
 | Git verifier | `./orchestrator/src/git/` | Verifies pushed refs and merges against the remote |
+| SSH runner | `./orchestrator/src/remote/` | Runs host commands over SSH to drive `nixos-container` |
 
 ## Data flow
 
