@@ -69,6 +69,11 @@ export interface LoadOptions {
   env?: Record<string, string | undefined>;
   /** Typed overrides, e.g. from CLI flags. Highest precedence. */
   cli?: Raw;
+  /**
+   * Reject unknown `FLEET_*` env vars (default true). Set false when the same environment
+   * also carries non-config `FLEET_*` variables (e.g. the runtime's FLEET_SSH_HOST).
+   */
+  strictEnv?: boolean;
 }
 
 /** Allowed keys per section. Each key's type is validated explicitly in `assertValid`. */
@@ -269,10 +274,14 @@ export function loadConfig(options: LoadOptions = {}): Config {
   }
 
   const env = options.env ?? process.env;
+  const strictEnv = options.strictEnv ?? true;
   for (const [name, value] of Object.entries(env)) {
     if (!name.startsWith("FLEET_") || value === undefined) continue;
     const path = ENV_MAP[name];
-    if (path === undefined) fail(name, "unknown FLEET_ environment variable");
+    if (path === undefined) {
+      if (strictEnv) fail(name, "unknown FLEET_ environment variable");
+      continue;
+    }
     setPath(raw, path, coerceEnvValue(templateFor(path), value, path));
   }
 

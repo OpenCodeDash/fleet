@@ -13,7 +13,7 @@ export async function run(argv: string[], env: Record<string, string | undefined
     );
     return 2;
   }
-  const config = loadConfig({ filePath: env.FLEET_CONFIG, env });
+  const config = loadConfig({ filePath: env.FLEET_CONFIG, env, strictEnv: false });
   const runtime = createRuntime(runtimeOptionsFromEnv(config, env));
   const outcome = await runtime.runAttempt({
     taskId,

@@ -84,6 +84,14 @@ test("rejects an unknown FLEET_ environment variable", () => {
   );
 });
 
+test("ignores unknown FLEET_ vars when strictEnv is false", () => {
+  const config = loadConfig({
+    env: withProxy({ FLEET_BOARD_URL: "http://x", FLEET_AGENT: "build" }),
+    strictEnv: false,
+  });
+  assert.equal(config.egress.proxy, "http://proxy.internal:3128");
+});
+
 test("rejects an unknown key in the config file", () => {
   const filePath = writeConfig(`
 [egress]
