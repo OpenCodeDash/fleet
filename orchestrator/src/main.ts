@@ -14,7 +14,12 @@ export async function run(argv: string[], env: Record<string, string | undefined
     return 2;
   }
   const config = loadConfig({ filePath: env.FLEET_CONFIG, env, strictEnv: false });
-  const runtime = createRuntime(runtimeOptionsFromEnv(config, env));
+  const runtime = createRuntime({
+    ...runtimeOptionsFromEnv(config, env),
+    onProgress: (message) => {
+      process.stdout.write(`[fleet] ${message}\n`);
+    },
+  });
   const outcome = await runtime.runAttempt({
     taskId,
     repo: env.FLEET_REPO ?? "",

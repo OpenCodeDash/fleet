@@ -70,6 +70,8 @@ export interface LoopDeps {
   git: GitVerifier;
   board: BoardPort;
   sinkFor(correlation: Correlation, secrets: string[]): EventSink;
+  /** Receives human-readable progress updates (optional). */
+  onProgress?(message: string): void;
   /** Host path of the container module (e.g. /etc/nixos/image/fleet-agent.nix). */
   modulePath: string;
   port: number;

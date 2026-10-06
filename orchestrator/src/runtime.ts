@@ -34,6 +34,8 @@ export interface RuntimeOptions {
   eventsPath: string;
   model?: { providerID: string; modelID: string };
   agent?: string;
+  /** Receives progress updates; the CLI wires this to stdout. */
+  onProgress?: (message: string) => void;
   /** Extra env injected into every container (provider keys, git token, ...). */
   injectEnv?: Record<string, string>;
 }
@@ -117,6 +119,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     modulePath: options.modulePath,
     port: 4096,
     verifyRetries: options.config.verify.retries,
+    onProgress: options.onProgress,
   };
 
   const loop = new TaskLoop(deps);

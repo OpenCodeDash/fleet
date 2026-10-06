@@ -43,6 +43,7 @@ function harness(options: HarnessOptions = {}): {
   destroyed: string[];
   revoked: string[];
   provisioned: string[];
+  progress: string[];
 } {
   const agentCalls: AgentRunInput[] = [];
   const moves: Array<{ taskId: string; column: string }> = [];
@@ -50,6 +51,7 @@ function harness(options: HarnessOptions = {}): {
   const destroyed: string[] = [];
   const revoked: string[] = [];
   const provisioned: string[] = [];
+  const progress: string[] = [];
 
   const completions = options.completions ?? [];
   const remoteRefSeq = Array.isArray(options.remoteRef) ? [...options.remoteRef] : null;
@@ -109,9 +111,12 @@ function harness(options: HarnessOptions = {}): {
     modulePath: "/etc/nixos/image/fleet-agent.nix",
     port: 4096,
     verifyRetries: options.verifyRetries ?? 0,
+    onProgress: (message) => {
+      progress.push(message);
+    },
   };
 
-  return { deps, agentCalls, moves, notes, destroyed, revoked, provisioned };
+  return { deps, agentCalls, moves, notes, destroyed, revoked, provisioned, progress };
 }
 
 const authorAttempt: TaskAttempt = {
@@ -146,6 +151,8 @@ test("author: verifies the pushed ref, notes and moves to Code Review, tears dow
   assert.deepEqual(h.destroyed, ["c1"]);
   assert.deepEqual(h.revoked, ["c1"]);
   assert.equal(h.agentCalls[0]?.address, "http://c1:4096");
+  assert.ok(h.progress.some((m) => /provisioning container c1/.test(m)));
+  assert.ok(h.progress.some((m) => /moving task #1 to Code Review/.test(m)));
 });
 
 test("author: re-prompts after a failed verification and then succeeds", async () => {

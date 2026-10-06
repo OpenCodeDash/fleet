@@ -31,22 +31,37 @@ export class TaskLoop {
     this.deps = deps;
   }
 
+  private progress(message: string): void {
+    this.deps.onProgress?.(message);
+  }
+
   async run(attempt: TaskAttempt): Promise<AttemptOutcome> {
     let handle: ContainerHandle | null = null;
     let sink: EventSink | null = null;
     let minted = false;
     try {
+      this.progress(`compiling capabilities for task ${attempt.taskId} (${attempt.role})`);
       const compiled = this.deps.compile({
         taskId: attempt.taskId,
         repo: attempt.repo,
         role: attempt.role,
         grants: attempt.grants,
       });
+      this.progress(
+        `compiled: hash ${compiled.capabilityHash.slice(0, 12)} servers [${compiled.audit.servers.join(", ") || "none"}]`,
+      );
       const credentials = await this.deps.mintCredentials(
         attempt.containerId,
         compiled.credentials,
       );
       minted = true;
+      this.progress(
+        `minted credentials for ${attempt.containerId}${
+          Object.keys(credentials.env).length > 0
+            ? ` [${Object.keys(credentials.env).join(", ")}]`
+            : ""
+        }`,
+      );
       sink = this.deps.sinkFor(
         {
           taskId: attempt.taskId,
@@ -72,12 +87,14 @@ export class TaskLoop {
           mode: "0400",
         });
       }
+      this.progress(`provisioning container ${attempt.containerId}`);
       handle = await this.deps.provision({
         name: attempt.containerId,
         modulePath: this.deps.modulePath,
         configFiles,
         port: this.deps.port,
       });
+      this.progress(`container ready at ${handle.address}`);
       await sink.record({
         source: "lifecycle",
         type: "provisioned",
@@ -89,12 +106,14 @@ export class TaskLoop {
           ? await this.runAuthor(attempt, sink, handle.address)
           : await this.runReviewer(attempt, sink, handle.address);
 
+      this.progress(`tearing down ${attempt.containerId}`);
       await sink.flush();
       await this.deps.destroy(handle);
       await this.deps.revokeCredentials(attempt.containerId);
       return outcome;
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
+      this.progress(`error: ${reason}`);
       if (sink !== null) {
         try {
           await sink.record({ source: "lifecycle", type: "error", data: reason });
@@ -118,6 +137,7 @@ export class TaskLoop {
         round === 0
           ? attempt.prompt
           : `Your handoff failed verification: ${lastReason}. Fix it and return the result again.`;
+      this.progress(`driving author agent (attempt ${round + 1}/${this.deps.verifyRetries + 1})`);
       const completion = await this.deps.runAgent({
         address,
         role: "author",
@@ -131,11 +151,15 @@ export class TaskLoop {
       } else {
         const check = await this.verifyAuthor(result);
         if (check.ok) {
+          this.progress(
+            `verified ${result.branch}@${result.head_sha.slice(0, 8)}; moving task ${attempt.taskId} to Code Review`,
+          );
           await this.deps.board.appendNote(attempt.taskId, result.summary);
           await this.deps.board.moveTo(attempt.taskId, "Code Review");
           return { status: "completed", action: "code-review" };
         }
         lastReason = check.reason;
+        this.progress(`verification failed: ${check.reason}`);
       }
       await sink.record({ source: "lifecycle", type: "verify-failed", data: lastReason });
     }
@@ -151,6 +175,7 @@ export class TaskLoop {
     sink: EventSink,
     address: string,
   ): Promise<AttemptOutcome> {
+    this.progress("driving reviewer agent");
     const completion = await this.deps.runAgent({
       address,
       role: "reviewer",
@@ -163,15 +188,20 @@ export class TaskLoop {
       return { status: "failed", reason: "agent returned a non-reviewer result", escalate: false };
     }
     if (result.verdict === "changes") {
+      this.progress(
+        `review: changes requested; moving task ${attempt.taskId} to Changes Requested`,
+      );
       await this.deps.board.appendNote(attempt.taskId, result.note);
       await this.deps.board.moveTo(attempt.taskId, "Changes Requested");
       return { status: "completed", action: "changes-requested" };
     }
     const check = await this.verifyReviewer(attempt, result);
     if (!check.ok) {
+      this.progress(`review verification failed: ${check.reason}`);
       await sink.record({ source: "lifecycle", type: "verify-failed", data: check.reason });
       return { status: "failed", reason: check.reason, escalate: false };
     }
+    this.progress(`review: approved; moving task ${attempt.taskId} to Done`);
     await this.deps.board.moveTo(attempt.taskId, "Done");
     return { status: "completed", action: "done" };
   }
