@@ -67,7 +67,7 @@ const REVIEWER = { verdict: "approve", note: "ok", merge_sha: "m" };
 test("runs an author turn and parses the structured result", async () => {
   const { impl, calls } = fakeFetch([
     { body: { id: "ses_1" } },
-    { body: { info: { structured_output: AUTHOR } } },
+    { body: { info: { structured: AUTHOR } } },
   ]);
   const result = await new OpencodeAgentRunner({ fetchImpl: impl }).run(runInput("author"));
 
@@ -80,10 +80,21 @@ test("runs an author turn and parses the structured result", async () => {
   assert.equal(body.format.schema.properties.status?.const, "done");
 });
 
+test("surfaces a terminal agent error (e.g. StructuredOutputError)", async () => {
+  const { impl } = fakeFetch([
+    { body: { id: "ses" } },
+    { body: { info: { error: { name: "StructuredOutputError", data: { message: "bad", retries: 2 } } } } },
+  ]);
+  await assert.rejects(
+    () => new OpencodeAgentRunner({ fetchImpl: impl }).run(runInput("author")),
+    (error: unknown) => error instanceof AgentError && /StructuredOutputError/.test((error as Error).message),
+  );
+});
+
 test("runs a reviewer turn with the reviewer schema", async () => {
   const { impl, calls } = fakeFetch([
     { body: { id: "ses_2" } },
-    { body: { info: { structured_output: REVIEWER } } },
+    { body: { info: { structured: REVIEWER } } },
   ]);
   const result = await new OpencodeAgentRunner({ fetchImpl: impl }).run(runInput("reviewer"));
 
@@ -95,7 +106,7 @@ test("runs a reviewer turn with the reviewer schema", async () => {
 test("passes model and agent when configured", async () => {
   const { impl, calls } = fakeFetch([
     { body: { id: "ses" } },
-    { body: { info: { structured_output: AUTHOR } } },
+    { body: { info: { structured: AUTHOR } } },
   ]);
   await new OpencodeAgentRunner({
     fetchImpl: impl,
@@ -119,7 +130,7 @@ test("records lifecycle events on the sink", async () => {
   };
   const { impl } = fakeFetch([
     { body: { id: "ses" } },
-    { body: { info: { structured_output: AUTHOR } } },
+    { body: { info: { structured: AUTHOR } } },
   ]);
   await new OpencodeAgentRunner({ fetchImpl: impl }).run(input);
   assert.deepEqual(
@@ -145,7 +156,7 @@ test("throws AgentError when structured output is missing or invalid", async () 
 
   const invalid = fakeFetch([
     { body: { id: "ses" } },
-    { body: { info: { structured_output: { status: "done" } } } },
+    { body: { info: { structured: { status: "done" } } } },
   ]);
   await assert.rejects(
     () => new OpencodeAgentRunner({ fetchImpl: invalid.impl }).run(runInput("author")),

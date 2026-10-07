@@ -98,10 +98,21 @@ function readSessionId(value: unknown): string {
 function extractStructured(message: unknown): unknown {
   const record = asRecord(message, "message response");
   const info = record.info;
-  if (typeof info === "object" && info !== null && "structured_output" in info) {
-    return (info as Record<string, unknown>).structured_output;
+  if (isRecord(info)) {
+    // The assistant message carries a terminal error when the turn failed.
+    if (info.error !== undefined && info.error !== null) {
+      const error = isRecord(info.error) ? info.error : {};
+      const name = typeof error.name === "string" ? error.name : "error";
+      const data = isRecord(error.data) ? error.data : {};
+      const detail =
+        typeof data.message === "string" ? data.message : JSON.stringify(error).slice(0, 200);
+      throw new AgentError(`agent failed: ${name} — ${detail}`);
+    }
+    // opencode stores the schema'd result on the assistant message as `structured`.
+    if (info.structured !== undefined && info.structured !== null) return info.structured;
   }
-  if ("structured_output" in record) return record.structured_output;
+  if (record.structured !== undefined && record.structured !== null) return record.structured;
+  if (record.structured_output !== undefined) return record.structured_output;
   throw new AgentError("opencode response did not include structured output");
 }
 
