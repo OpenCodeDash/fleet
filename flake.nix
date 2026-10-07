@@ -40,11 +40,23 @@
         inherit system;
         specialArgs = {
           fleetContainer = self.nixosConfigurations.fleet-agent.config.system.build.toplevel;
+          fleetEgressProxy = self.packages.${system}.fleet-egress-proxy;
         };
         modules = [ ./host/fleet-host.nix ];
       };
 
-      # A runnable QEMU VM of the host, for local development.
-      packages.${system}.fleet-host-vm = self.nixosConfigurations.fleet-host.config.system.build.vm;
+      packages.${system} = {
+        # A runnable QEMU VM of the host, for local development.
+        fleet-host-vm = self.nixosConfigurations.fleet-host.config.system.build.vm;
+
+        # Host-side default-deny egress proxy (no npm deps; runs on node with type stripping).
+        fleet-egress-proxy = pkgs.writeShellApplication {
+          name = "fleet-egress-proxy";
+          runtimeInputs = [ pkgs.nodejs_24 ];
+          text = ''
+            exec node ${./orchestrator/src/egress}/main.ts
+          '';
+        };
+      };
     };
 }

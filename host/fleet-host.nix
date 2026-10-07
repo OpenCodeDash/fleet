@@ -5,7 +5,7 @@
 # minting, the board, the egress proxy's policy — lives elsewhere; see docs/architecture.md.
 #
 # `nix build .#fleet-host-vm` runs this host in QEMU for local development.
-{ pkgs, fleetContainer, ... }:
+{ pkgs, fleetContainer, fleetEgressProxy, ... }:
 {
   system.stateVersion = "25.11";
   networking.hostName = "fleet-host";
@@ -32,8 +32,8 @@
   # host's proxy and the host can reach each container's opencode server. See ADR 0012.
   networking.useNetworkd = true;
   networking.firewall.enable = true;
-  # The off-box orchestrator connects over SSH; this is the only inbound port.
-  networking.firewall.allowedTCPPorts = [ 22 ];
+  # The off-box orchestrator connects over SSH; 3129 is the egress admin port.
+  networking.firewall.allowedTCPPorts = [ 22 3129 ];
 
   # Uplink DHCP — the nspawn zone only serves the containers themselves, so the host's own
   # NIC needs an address to reach the board, git and the Nix cache. `en*`/`eth*` covers
@@ -50,4 +50,21 @@
   # The off-box orchestrator drives this host over SSH (its CommandRunner).
   services.openssh.enable = true;
   environment.systemPackages = [ pkgs.git ];
+
+  # Host-side default-deny egress proxy. Containers route through it; the orchestrator
+  # registers each container's allowlist (its veth address) via the admin port at provision.
+  # Base allowlist is empty — everything not explicitly registered is denied.
+  systemd.services.fleet-egress = {
+    description = "fleet egress proxy";
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      ExecStart = "${fleetEgressProxy}/bin/fleet-egress-proxy";
+      Restart = "on-failure";
+    };
+    environment = {
+      FLEET_EGRESS_PORT = "3128";
+      FLEET_EGRESS_ADMIN_PORT = "3129";
+      FLEET_EGRESS_ALLOW = "";
+    };
+  };
 }

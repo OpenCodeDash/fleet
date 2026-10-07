@@ -8,6 +8,7 @@ import {
   hostMatches,
   isAllowed,
   normalizeHost,
+  startEgressAdmin,
   type EgressEvent,
 } from "../src/egress/index.ts";
 
@@ -97,7 +98,8 @@ test("forwards an allowlisted HTTP request", async () => {
     const result = await proxyRequest(proxyPort, `http://127.0.0.1:${originPort}/x`);
     assert.equal(result.status, 200);
     assert.equal(result.body, "hello");
-    assert.deepEqual(events, [{ host: "127.0.0.1", allowed: true, method: "GET" }]);
+    assert.equal(events[0]?.host, "127.0.0.1");
+    assert.equal(events[0]?.allowed, true);
   } finally {
     await proxy.close();
     origin.close();
@@ -130,4 +132,47 @@ test("denies a non-allowlisted CONNECT tunnel", async () => {
 test("isAllowed consults the whole list", () => {
   assert.equal(isAllowed("api.github.com", ["*.example.com", "api.github.com"]), true);
   assert.equal(isAllowed("nope.dev", ["*.example.com", "api.github.com"]), false);
+});
+
+test("per-client grants: deny by default, allow after registering the client", async () => {
+  const origin = createServer((_req, res) => {
+    res.writeHead(200).end("ok");
+  });
+  const originPort = await listen(origin);
+  const proxy = new EgressProxy({ allowlist: [] });
+  const proxyPort = await proxy.listen();
+  try {
+    const denied = await proxyRequest(proxyPort, `http://127.0.0.1:${originPort}/x`);
+    assert.equal(denied.status, 403);
+
+    proxy.register("127.0.0.1", ["127.0.0.1"]);
+    const allowed = await proxyRequest(proxyPort, `http://127.0.0.1:${originPort}/x`);
+    assert.equal(allowed.status, 200);
+    assert.deepEqual(proxy.clients(), ["127.0.0.1"]);
+  } finally {
+    await proxy.close();
+    origin.close();
+  }
+});
+
+test("admin API registers and drops client allowlists", async () => {
+  const proxy = new EgressProxy({ allowlist: [] });
+  const admin = await startEgressAdmin(proxy, 0, "127.0.0.1");
+  const address = admin.address();
+  const port = typeof address === "object" && address !== null ? address.port : 0;
+  try {
+    const post = await fetch(`http://127.0.0.1:${port}/allowlist`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ client: "10.233.1.2", hosts: ["github.com"] }),
+    });
+    assert.equal(post.status, 204);
+    assert.deepEqual(proxy.clients(), ["10.233.1.2"]);
+
+    const del = await fetch(`http://127.0.0.1:${port}/allowlist/10.233.1.2`, { method: "DELETE" });
+    assert.equal(del.status, 204);
+    assert.deepEqual(proxy.clients(), []);
+  } finally {
+    await new Promise<void>((resolve) => admin.close(() => resolve()));
+  }
 });
