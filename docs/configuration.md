@@ -2,14 +2,15 @@
 
 Read when adding, changing, or overriding an orchestrator setting.
 
-Every tunable has a built-in sane default. Override in `orchestrator.toml` at the repo root,
-or with `FLEET_*` environment variables. Config is schema-validated at startup; an invalid
-or floor-violating value aborts startup.
+Every tunable has a built-in sane default. Set them in `orchestrator.yaml` (path via
+`FLEET_CONFIG`, default `./orchestrator.yaml`; see `orchestrator/orchestrator.example.yaml`).
+Secrets are written as `${env:NAME}` and resolved from the environment. Config is
+schema-validated at startup; an invalid or floor-violating value aborts startup.
 
 ## Precedence
 
 ```
-built-in defaults  <  orchestrator.toml  <  FLEET_* env  <  CLI flags
+built-in defaults  <  orchestrator.yaml  <  ${env:NAME} substitution
 ```
 
 **Security floors are not overridable** — not by config, env, CLI, or the per-repo manifest:
@@ -27,9 +28,10 @@ A value that would loosen a floor is rejected at startup, not silently clamps.
 | --- | ------- | ------- | ------ |
 | `credentials.ttl` | `1h` | minted token lifetime | [credentials.md](credentials.md) |
 | `credentials.revokeOnDestroy` | `true` | revoke tokens at teardown | [credentials.md](credentials.md) |
-| `egress.mode` | `deny` | default-deny; `allow` is a floor violation | [egress.md](egress.md) |
-| `egress.allow` | `[]` | extra allowlist hosts (on top of orchestrator + granted MCPs) | [egress.md](egress.md) |
-| `egress.proxy` | required | HTTP(S) proxy that enforces the allowlist | [egress.md](egress.md) |
+| `hosts[].egress.adminUrl` | — | host egress admin the orchestrator registers allowlists with | [egress.md](egress.md) |
+| `hosts[].egress.proxyUrl` | — | proxy URL the container's opencode/git use | [egress.md](egress.md) |
+| `hosts[].egress.base` | `[]` | static allowlist hosts (orchestrator + model provider) | [egress.md](egress.md) |
+| `hosts[].egress.noProxy` | `[localhost, 127.0.0.1]` | hosts that bypass the proxy | [egress.md](egress.md) |
 | `review.maxRounds` | `3` | review iterations before `Need Help` | [handoff.md](handoff.md#iteration-bound) |
 | `provision.retries` | `2` | provision attempts before `Need Help` | [orchestrator.md](orchestrator.md#failure-semantics) |
 | `verify.retries` | `2` | handoff re-validations before `Need Help` | [orchestrator.md](orchestrator.md#failure-semantics) |

@@ -22,8 +22,13 @@ hosts:
       key: ${env:FLEET_SSH_KEY}
     maxContainers: 10
     egress:
+      # Admin API the orchestrator uses to register/drop each container's allowlist.
       adminUrl: http://192.168.68.106:3129
+      # Proxy URL the container's opencode/git use (the host's gateway in the container net).
+      proxyUrl: http://10.233.0.1:3128
+      # Static allowlist: orchestrator + model provider (+ egress.allow additions).
       base: [192.168.68.51]
+      noProxy: [localhost, 127.0.0.1]
 
 # Repos keyed by board tag (repo:<name>), plus `default`.
 repos:

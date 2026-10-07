@@ -101,17 +101,23 @@ hash or the event stream.
 
 Start from the defaults and set what you must:
 
-```toml
-# orchestrator.toml
-[egress]
-proxy = "http://10.0.0.1:3128"   # required; enforces the per-container allowlist
-
-[limits]
-maxContainers = 10
+```yaml
+# orchestrator.yaml
+hosts:
+  - name: agents.bigbox
+    ssh: { host: 192.168.68.106, user: root }
+    egress:
+      adminUrl: http://192.168.68.106:3129   # host egress admin (registers allowlists)
+      proxyUrl: http://10.233.0.1:3128       # container-reachable proxy (host gateway)
+      base: [192.168.68.51]                  # orchestrator + model provider
+limits:
+  maxContainers: 10
 ```
 
-Any key is overridable with a `FLEET_*` environment variable. Invalid or floor-violating
-values abort startup. Full list and precedence: [`configuration.md`](configuration.md).
+The orchestrator registers each container's veth address + allowlist with `adminUrl` at
+provision and drops it at teardown; the container's opencode and git route through `proxyUrl`.
+Invalid or floor-violating values abort startup. Full list and precedence:
+[`configuration.md`](configuration.md), [`egress.md`](egress.md).
 
 ## 6. Declare repo capabilities (runnable)
 
@@ -159,8 +165,9 @@ host-private `:4096` through an **SSH tunnel** to `FLEET_SSH_HOST` (no tunnel is
 `FLEET_SSH_HOST` is unset and the orchestrator is co-located). Mount the fleet host's SSH key.
 The container clones/pushes `FLEET_REPO` itself; the orchestrator needs no repo clone.
 
-Still required before a full unattended run: the host-side **egress** for containers to reach
-the model provider (#121) and network isolation.
+Container egress is wired (#133): the container's opencode/git use the host proxy, and the
+orchestrator registers/drops each container's allowlist. The host has no NAT, so the proxy is
+the only path off the container network.
 
 
 ## 8. Verify
@@ -177,4 +184,4 @@ teardown.
 | Host (VM or machine) | implemented — `host/`, `nix run .#fleet-host-vm` |
 | Container image | implemented — `image/` |
 | Board client, capability compiler, credential broker, provisioner, egress proxy, event sink, control loop, scheduler, reconciler, agent configs, git verifier | implemented + unit-tested |
-| Process entrypoint + live adapters | pending — #114, #115, #117, #121 |
+| Process entrypoint + live adapters | implemented — #114, #115, #117, #121, #133 |

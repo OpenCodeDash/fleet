@@ -13,6 +13,7 @@ import type { AttemptOutcome, LoopDeps, TaskAttempt } from "../loop/types.ts";
 import { OpencodeAgentRunner } from "../agents/index.ts";
 import { EventSink, JsonlEventStore } from "../observability/index.ts";
 import { NodeExecutor, SshCommandRunner, makeSshTunnelFactory } from "../remote/index.ts";
+import { EgressRegistrar } from "../egress/index.ts";
 import { NixosContainerBackend } from "../provision/backend.ts";
 import { ContainerProvisioner } from "../provision/provisioner.ts";
 import type { CommandRunner } from "../provision/types.ts";
@@ -129,10 +130,18 @@ export function createDaemon(
       target: host.ssh.user === undefined ? host.ssh.host : `${host.ssh.user}@${host.ssh.host}`,
       extraArgs: sshExtra,
     });
+    const registrar =
+      host.egress === undefined
+        ? undefined
+        : new EgressRegistrar({ adminUrl: host.egress.adminUrl });
     provisioners.set(
       host.name,
       new ContainerProvisioner(
-        new NixosContainerBackend(runner, { tunnel, dns: config.container.dns }),
+        new NixosContainerBackend(runner, {
+          tunnel,
+          dns: config.container.dns,
+          ...(registrar === undefined ? {} : { registrar }),
+        }),
       ),
     );
   }
@@ -165,6 +174,15 @@ export function createDaemon(
       port: config.container.port,
       verifyRetries: 0,
       onProgress: log,
+      ...(host.egress === undefined
+        ? {}
+        : {
+            egress: {
+              proxyUrl: host.egress.proxyUrl,
+              base: host.egress.base,
+              ...(host.egress.noProxy === undefined ? {} : { noProxy: host.egress.noProxy }),
+            },
+          }),
     };
     const attempt: TaskAttempt = {
       taskId: String(candidate.task.id),

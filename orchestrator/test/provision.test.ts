@@ -178,6 +178,52 @@ test("opens a tunnel for a remote orchestrator and closes it on stop", async () 
   assert.equal(closed, true);
 });
 
+test("registers the container allowlist at start and drops it at stop", async () => {
+  const { runner } = recordingRunner([ok(), ok(), ok(), ok(), ok("10.233.1.2\n")]);
+  const registered: Array<{ client: string; hosts: string[] }> = [];
+  const unregistered: string[] = [];
+  const registrar = {
+    async register(client: string, hosts: string[]) {
+      registered.push({ client, hosts });
+    },
+    async unregister(client: string) {
+      unregistered.push(client);
+    },
+  };
+  const backend = new NixosContainerBackend(runner, { registrar });
+  const handle = await backend.start({ ...spec, egress: { allowlist: ["github.com", "192.168.68.51"] } });
+  assert.equal(handle.client, "10.233.1.2");
+  assert.deepEqual(registered, [{ client: "10.233.1.2", hosts: ["github.com", "192.168.68.51"] }]);
+  await backend.stop(handle);
+  assert.deepEqual(unregistered, ["10.233.1.2"]);
+});
+
+test("stop tolerates an egress admin that is already gone", async () => {
+  const { runner } = recordingRunner([ok(), ok(), ok(), ok(), ok("10.233.1.2\n")]);
+  const registrar = {
+    async register() {},
+    async unregister() {
+      throw new Error("proxy down");
+    },
+  };
+  const backend = new NixosContainerBackend(runner, { registrar });
+  const handle = await backend.start({ ...spec, egress: { allowlist: ["github.com"] } });
+  await backend.stop(handle);
+});
+
+test("does not register egress when the spec has none", async () => {
+  const { runner } = recordingRunner([ok(), ok(), ok(), ok(), ok("10.233.1.2\n")]);
+  let called = false;
+  const registrar = {
+    async register() {
+      called = true;
+    },
+    async unregister() {},
+  };
+  await new NixosContainerBackend(runner, { registrar }).start(spec);
+  assert.equal(called, false);
+});
+
 test("destroy delegates to the backend", async () => {
   const backend = fakeBackend();
   await new ContainerProvisioner(backend.backend).destroy({

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { compile, type Catalog } from "../src/capability/index.ts";
 import { CapabilityError } from "../src/capability/types.ts";
 import { EventSink, MemoryEventStore } from "../src/observability/index.ts";
-import { ProvisionError } from "../src/provision/index.ts";
+import { ProvisionError, type ContainerSpec } from "../src/provision/index.ts";
 import {
   TaskLoop,
   type AgentRunInput,
@@ -194,6 +194,24 @@ test("reviewer: changes moves back to Changes Requested with the note", async ()
   assert.deepEqual(outcome, { status: "completed", action: "changes-requested" });
   assert.deepEqual(h.moves, [{ taskId: "#1", column: "Changes Requested" }]);
   assert.deepEqual(h.notes, [{ taskId: "#1", note: "fix tests" }]);
+});
+
+test("wires the egress allowlist and proxy env into the container spec", async () => {
+  const h = harness({ completions: [authorResult] });
+  h.deps.egress = { proxyUrl: "http://10.233.0.1:3128", base: ["192.168.68.51"] };
+  let captured: ContainerSpec | undefined;
+  const original = h.deps.provision;
+  h.deps.provision = async (spec) => {
+    captured = spec;
+    return original(spec);
+  };
+  await new TaskLoop(h.deps).run(authorAttempt);
+  assert.ok(captured !== undefined);
+  assert.deepEqual(captured.egress?.allowlist, ["192.168.68.51", "api.github.com"]);
+  const egressFile = captured.configFiles.find((file) => file.path === "egress.env");
+  assert.ok(egressFile !== undefined);
+  assert.match(egressFile.contents, /HTTPS_PROXY=http:\/\/10\.233\.0\.1:3128/);
+  assert.match(egressFile.contents, /NO_PROXY=localhost,127\.0\.0\.1/);
 });
 
 test("provision failure requeues and revokes minted credentials", async () => {

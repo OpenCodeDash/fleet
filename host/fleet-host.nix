@@ -35,6 +35,13 @@
   # The off-box orchestrator connects over SSH; 3129 is the egress admin port.
   networking.firewall.allowedTCPPorts = [ 22 3129 ];
 
+  # Containers may reach only the egress proxy on the host. There is deliberately no NAT, so
+  # the proxy is the sole path off the container network (ADR 0008); anything not on a
+  # container's registered allowlist is denied.
+  networking.firewall.extraInputRules = ''
+    ip saddr 10.233.0.0/16 tcp dport 3128 accept
+  '';
+
   # Uplink DHCP — the nspawn zone only serves the containers themselves, so the host's own
   # NIC needs an address to reach the board, git and the Nix cache. `en*`/`eth*` covers
   # Proxmox/typical NIC names; the zone bridge (vz-*) and container veths (vb-*) are not matched.

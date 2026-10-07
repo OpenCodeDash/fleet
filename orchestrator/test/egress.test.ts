@@ -4,10 +4,13 @@ import { connect as netConnect } from "node:net";
 import { test } from "node:test";
 import {
   EgressProxy,
+  EgressRegistrar,
   buildAllowlist,
   hostMatches,
   isAllowed,
   normalizeHost,
+  proxyEnv,
+  renderProxyEnv,
   startEgressAdmin,
   type EgressEvent,
 } from "../src/egress/index.ts";
@@ -153,6 +156,52 @@ test("per-client grants: deny by default, allow after registering the client", a
     await proxy.close();
     origin.close();
   }
+});
+
+test("proxyEnv sets both cases and a default bypass list", () => {
+  assert.deepEqual(proxyEnv("http://10.233.0.1:3128"), {
+    HTTP_PROXY: "http://10.233.0.1:3128",
+    HTTPS_PROXY: "http://10.233.0.1:3128",
+    http_proxy: "http://10.233.0.1:3128",
+    https_proxy: "http://10.233.0.1:3128",
+    NO_PROXY: "localhost,127.0.0.1",
+    no_proxy: "localhost,127.0.0.1",
+  });
+});
+
+test("renderProxyEnv emits a systemd EnvironmentFile", () => {
+  const rendered = renderProxyEnv("http://10.233.0.1:3128", ["localhost"]);
+  assert.match(rendered, /^HTTPS_PROXY=http:\/\/10\.233\.0\.1:3128$/m);
+  assert.match(rendered, /^no_proxy=localhost$/m);
+  assert.ok(rendered.endsWith("\n"));
+});
+
+test("registrar registers and drops a container allowlist via the admin API", async () => {
+  const proxy = new EgressProxy({ allowlist: [] });
+  const admin = await startEgressAdmin(proxy, 0, "127.0.0.1");
+  const address = admin.address();
+  const port = typeof address === "object" && address !== null ? address.port : 0;
+  const registrar = new EgressRegistrar({ adminUrl: `http://127.0.0.1:${port}/` });
+  try {
+    await registrar.register("10.233.1.2", ["github.com"]);
+    assert.deepEqual(proxy.clients(), ["10.233.1.2"]);
+
+    await registrar.unregister("10.233.1.2");
+    assert.deepEqual(proxy.clients(), []);
+
+    // A second drop is a no-op, not an error.
+    await registrar.unregister("10.233.1.2");
+  } finally {
+    await new Promise<void>((resolve) => admin.close(() => resolve()));
+  }
+});
+
+test("registrar rejects when the admin refuses the allowlist", async () => {
+  const registrar = new EgressRegistrar({
+    adminUrl: "http://127.0.0.1:1",
+    fetchImpl: (async () => new Response("", { status: 500 })) as typeof fetch,
+  });
+  await assert.rejects(() => registrar.register("10.0.0.1", ["x"]), /rejected allowlist/);
 });
 
 test("admin API registers and drops client allowlists", async () => {

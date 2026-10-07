@@ -1,4 +1,5 @@
 import { renderContainerConfig } from "./render.ts";
+import type { EgressAdmin } from "../egress/registrar.ts";
 import type { TunnelFactory } from "../remote/tunnel.ts";
 import {
   ProvisionError,
@@ -24,6 +25,11 @@ export interface ContainerBackendOptions {
    * container; this overrides it so DNS works.
    */
   dns?: string[];
+  /**
+   * Registers each container's egress allowlist with the host proxy at provision and drops
+   * it at teardown. Required for containers to reach anything (default-deny).
+   */
+  registrar?: EgressAdmin;
 }
 
 const CONFIG_DIR = "/run/fleet";
@@ -38,11 +44,13 @@ export class NixosContainerBackend implements ContainerBackend {
   private readonly runner: CommandRunner;
   private readonly tunnel: TunnelFactory | undefined;
   private readonly dns: string[];
+  private readonly registrar: EgressAdmin | undefined;
 
   constructor(runner: CommandRunner, options: ContainerBackendOptions = {}) {
     this.runner = runner;
     this.tunnel = options.tunnel;
     this.dns = options.dns ?? [];
+    this.registrar = options.registrar;
   }
 
   async start(spec: ContainerSpec): Promise<ContainerHandle> {
@@ -76,13 +84,22 @@ export class NixosContainerBackend implements ContainerBackend {
     if (ipResult.code !== 0 || ip.length === 0) {
       throw new ProvisionError(`container "${spec.name}" started but reported no IP`);
     }
+    if (this.registrar !== undefined && spec.egress !== undefined) {
+      // Register before returning: the allowlist must be in place before the agent runs.
+      await this.registrar.register(ip, spec.egress.allowlist);
+    }
+    const handle: ContainerHandle = {
+      name: spec.name,
+      spec,
+      address: `http://${ip}:${spec.port}`,
+      client: ip,
+    };
     if (this.tunnel === undefined) {
-      return { name: spec.name, spec, address: `http://${ip}:${spec.port}` };
+      return handle;
     }
     const tunnel = this.tunnel(ip, spec.port);
     return {
-      name: spec.name,
-      spec,
+      ...handle,
       address: `http://127.0.0.1:${tunnel.localPort}`,
       close: () => tunnel.close(),
     };
@@ -90,13 +107,29 @@ export class NixosContainerBackend implements ContainerBackend {
 
   async stop(handle: ContainerHandle): Promise<void> {
     handle.close?.();
-    // Terminate is best-effort (the machine may already be gone); destroy removes the root.
-    await this.runner.run("nixos-container", ["terminate", handle.name]);
-    const destroy = await this.runner.run("nixos-container", ["destroy", handle.name]);
-    if (destroy.code !== 0 && !/does not exist/i.test(destroy.stderr)) {
-      throw new ProvisionError(
-        `failed to destroy container "${handle.name}": ${destroy.stderr.trim() || destroy.stdout.trim()}`,
-      );
+    try {
+      // Terminate is best-effort (the machine may already be gone); destroy removes the root.
+      await this.runner.run("nixos-container", ["terminate", handle.name]);
+      const destroy = await this.runner.run("nixos-container", ["destroy", handle.name]);
+      if (destroy.code !== 0 && !/does not exist/i.test(destroy.stderr)) {
+        throw new ProvisionError(
+          `failed to destroy container "${handle.name}": ${destroy.stderr.trim() || destroy.stdout.trim()}`,
+        );
+      }
+    } finally {
+      // Drop the allowlist even if the container teardown failed: a stale grant is a live
+      // network path. Best-effort — teardown must not fail because the proxy is already gone.
+      if (
+        this.registrar !== undefined &&
+        handle.spec.egress !== undefined &&
+        handle.client !== undefined
+      ) {
+        try {
+          await this.registrar.unregister(handle.client);
+        } catch {
+          // ignore
+        }
+      }
     }
   }
 

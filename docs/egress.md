@@ -36,11 +36,22 @@ Overridable — see [configuration.md](configuration.md):
 
 ## Enforcement
 
-- nspawn network config: veth whose only gateway is the proxy.
-- The proxy is the sole egress path and logs connections per container.
+- The container gets `HTTP_PROXY`/`HTTPS_PROXY` (and the lowercase forms) plus
+  `NO_PROXY=localhost,127.0.0.1` in an `egress.env` `EnvironmentFile`. opencode
+  ([network docs](https://opencode.ai/docs/network/)) and git both honour these, so provider,
+  git and MCP traffic leaves via the proxy.
+- The host does **not** NAT the container network, so the proxy is the only path off it.
+  The host firewall accepts only the proxy port (`3128`) from the container subnet.
+- At provision the orchestrator registers the container's veth address with its allowlist on
+  the host's egress admin (`POST /allowlist`); at teardown it drops it
+  (`DELETE /allowlist/<client>`). The proxy is therefore the sole egress path and logs
+  connections per container.
 - A `soft` capability set (one that allows bash at all) MUST have egress enforced — this is
   the [capability-compiler](capability-compiler.md) invariant that makes tool gating
   meaningful.
+
+No nftables destination allowlist is needed: opencode's own HTTP client honours the proxy env
+vars, so LLM traffic is proxied like everything else.
 
 ## Invariants
 

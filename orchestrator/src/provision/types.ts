@@ -6,6 +6,11 @@ export interface ContainerConfigFile {
   mode?: string;
 }
 
+export interface EgressSpec {
+  /** Hosts this container may reach through the egress proxy. */
+  allowlist: string[];
+}
+
 export interface ContainerSpec {
   /** Container name; ≤ 11 chars (nixos-container / veth name limit). */
   name: string;
@@ -15,6 +20,8 @@ export interface ContainerSpec {
   configFiles: ContainerConfigFile[];
   /** Port the in-container `opencode serve` listens on. */
   port: number;
+  /** Egress policy registered with the host proxy; absent → nothing is registered. */
+  egress?: EgressSpec;
 }
 
 export interface ContainerHandle {
@@ -22,6 +29,8 @@ export interface ContainerHandle {
   spec: ContainerSpec;
   /** Base URL the orchestrator uses to reach this container's opencode server. */
   address: string;
+  /** The container's veth address, as the egress proxy sees it; the allowlist key. */
+  client?: string;
   /** Closes any host-side tunnel opened for this container (remote mode). */
   close?: () => void;
 }

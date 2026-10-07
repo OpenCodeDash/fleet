@@ -14,11 +14,22 @@ export interface SshConfig {
   key?: string;
 }
 
+export interface HostEgressConfig {
+  /** Admin API the orchestrator calls to register/drop a container's allowlist. */
+  adminUrl: string;
+  /** Proxy URL the container's HTTP(S) clients use (host-reachable, e.g. `http://10.233.0.1:3128`). */
+  proxyUrl: string;
+  /** Static allowlist hosts: orchestrator, model provider, `egress.allow`. */
+  base: string[];
+  /** Hosts that bypass the proxy; defaults to localhost/127.0.0.1. */
+  noProxy?: string[];
+}
+
 export interface HostConfig {
   name: string;
   ssh: SshConfig;
   maxContainers: number;
-  egress?: { adminUrl: string; base: string[] };
+  egress?: HostEgressConfig;
 }
 
 export interface RepoConfig {
@@ -140,9 +151,15 @@ function parseHosts(raw: Raw): HostConfig[] {
     if (key !== undefined) host.ssh.key = key;
     if (egressRaw !== undefined) {
       if (!isObject(egressRaw)) fail(`hosts[${index}].egress`, "expected a mapping");
+      const path = `hosts[${index}].egress`;
+      const noProxy = egressRaw.noProxy;
       host.egress = {
-        adminUrl: requiredString(egressRaw, "adminUrl", `hosts[${index}].egress`),
-        base: stringList(egressRaw, "base", `hosts[${index}].egress`, []),
+        adminUrl: requiredString(egressRaw, "adminUrl", path),
+        proxyUrl: requiredString(egressRaw, "proxyUrl", path),
+        base: stringList(egressRaw, "base", path, []),
+        ...(noProxy === undefined
+          ? {}
+          : { noProxy: stringList(egressRaw, "noProxy", path, []) }),
       };
     }
     return host;

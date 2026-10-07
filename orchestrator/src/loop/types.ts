@@ -76,4 +76,13 @@ export interface LoopDeps {
   modulePath: string;
   port: number;
   verifyRetries: number;
+  /** Egress proxy wiring; absent → the container is left without network policy. */
+  egress?: {
+    /** Proxy URL injected into the container's HTTP(S) clients. */
+    proxyUrl: string;
+    /** Static allowlist hosts (orchestrator, model provider, `egress.allow`). */
+    base: string[];
+    /** Hosts that bypass the proxy; defaults to localhost/127.0.0.1. */
+    noProxy?: string[];
+  };
 }

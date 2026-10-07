@@ -1,5 +1,6 @@
 import { CapabilityError } from "../capability/types.ts";
 import { renderConfigFiles } from "../agents/config-files.ts";
+import { buildAllowlist, renderProxyEnv } from "../egress/index.ts";
 import type { EventSink } from "../observability/index.ts";
 import type { ContainerHandle } from "../provision/types.ts";
 import type {
@@ -87,12 +88,26 @@ export class TaskLoop {
           mode: "0400",
         });
       }
+      const egress = this.deps.egress;
+      if (egress !== undefined) {
+        configFiles.push({
+          path: "egress.env",
+          contents: renderProxyEnv(egress.proxyUrl, egress.noProxy),
+        });
+      }
       this.progress(`provisioning container ${attempt.containerId}`);
       handle = await this.deps.provision({
         name: attempt.containerId,
         modulePath: this.deps.modulePath,
         configFiles,
         port: this.deps.port,
+        ...(egress === undefined
+          ? {}
+          : {
+              egress: {
+                allowlist: buildAllowlist({ mcpEgress: compiled.egress, extra: egress.base }),
+              },
+            }),
       });
       this.progress(`container ready at ${handle.address}`);
       await sink.record({
