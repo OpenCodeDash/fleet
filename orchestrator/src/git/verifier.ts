@@ -48,13 +48,23 @@ export class CommandGitVerifier implements GitVerifier {
     if (this.repoDir === undefined) {
       throw new Error("CommandGitVerifier: isAncestorOfMain requires a local clone (repoDir)");
     }
+    // Fetch the current main tip, then check ancestry against it (a local clone's refs go
+    // stale once the reviewer merges upstream).
+    await this.runner.run("git", [
+      "-C",
+      this.repoDir,
+      "fetch",
+      "--quiet",
+      this.remote,
+      this.mainRef,
+    ]);
     const result = await this.runner.run("git", [
       "-C",
       this.repoDir,
       "merge-base",
       "--is-ancestor",
       sha,
-      this.mainRef,
+      "FETCH_HEAD",
     ]);
     return result.code === 0;
   }
