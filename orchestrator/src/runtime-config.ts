@@ -35,6 +35,8 @@ export interface RuntimeConfig {
     done: string;
     blocked: string[];
   };
+  /** Path to the MCP capability catalog (see docs/capability-compiler.md). */
+  catalog: string;
   hosts: HostConfig[];
   /** Repos keyed by board tag (`repo:<name>`), plus `default`. */
   repos: Record<string, RepoConfig>;
@@ -184,6 +186,7 @@ function validate(raw: Raw): RuntimeConfig {
       done: optionalString(board, "done") ?? "Done",
       blocked: stringList(board, "blocked", "board", ["Need Help"]),
     },
+    catalog: requiredString(raw, "catalog", "config"),
     hosts: parseHosts(raw),
     repos: parseRepos(raw),
     container: {

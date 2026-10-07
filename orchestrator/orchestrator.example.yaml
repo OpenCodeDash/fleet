@@ -11,6 +11,9 @@ board:
   done: Done
   blocked: [Need Help]
 
+# Path to the MCP capability catalog (docs/capability-compiler.md).
+catalog: /etc/fleet/catalog.json
+
 hosts:
   - name: agents.bigbox
     ssh:

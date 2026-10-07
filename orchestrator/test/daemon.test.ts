@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Board, Column, Task } from "../src/board/index.ts";
-import { FleetDaemon, selectCandidates, type Candidate, type DaemonDeps, type TaskStateStore } from "../src/daemon/index.ts";
+import {
+  FleetDaemon,
+  branchForTask,
+  promptForTask,
+  repoForTask,
+  selectCandidates,
+  type Candidate,
+  type DaemonDeps,
+  type TaskStateStore,
+} from "../src/daemon/index.ts";
 import type { AttemptOutcome } from "../src/loop/index.ts";
 import type { HostConfig, RuntimeConfig } from "../src/runtime-config.ts";
 
@@ -19,6 +28,7 @@ function makeConfig(overrides: Partial<RuntimeConfig> = {}): RuntimeConfig {
       blocked: ["Need Help"],
     },
     hosts: [host("h1"), host("h2")],
+    catalog: "/c.json",
     repos: { default: { url: "u", dir: "d" } },
     container: { modulePath: "m", dns: [], port: 4096 },
     model: { provider: "router", id: "basic" },
@@ -180,4 +190,25 @@ test("tick starts eligible tasks and respects the concurrency cap", async () => 
   await daemon.tick();
   await daemon.waitIdle();
   assert.equal(rec.claims.length, 1);
+});
+
+test("repoForTask picks the repo:<name> tag, else default", () => {
+  const config = makeConfig({
+    repos: { default: { url: "d", dir: "dd" }, acme: { url: "a", dir: "aa" } },
+  });
+  assert.equal(repoForTask(task({ id: 1 }), config).url, "d");
+  const tagged = task({
+    id: 1,
+    tags: [{ id: 1, name: "repo:acme", description: null, prompt: null, color: null }],
+  });
+  assert.equal(repoForTask(tagged, config).url, "a");
+});
+
+test("branchForTask is deterministic and promptForTask frames the role", () => {
+  const t = task({ id: 42, name: "Add hello", description: "make it so" });
+  assert.equal(branchForTask(t), "feat/task-42");
+  assert.match(promptForTask(t, "author"), /feat\/task-42/);
+  assert.match(promptForTask(t, "author"), /Clone/);
+  assert.match(promptForTask(t, "reviewer"), /Review/);
+  assert.match(promptForTask(t, "reviewer"), /feat\/task-42/);
 });

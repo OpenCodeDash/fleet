@@ -24,6 +24,7 @@ repos:
 container:
   modulePath: /etc/nixos/image/fleet-agent.nix
 model: { provider: router, id: basic }
+catalog: /c.json
 `;
 
 const withToken = `
@@ -39,6 +40,7 @@ repos:
 container:
   modulePath: /m.nix
 model: { provider: router, id: basic }
+catalog: /c.json
 `;
 
 test("loads a minimal config with defaults", () => {
@@ -73,6 +75,7 @@ repos:
 container:
   modulePath: /m.nix
 model: { provider: router, id: basic }
+catalog: /c.json
 `);
   const config = loadRuntimeConfig({ filePath: file, env: {} });
   assert.equal(config.hosts.length, 2);
@@ -81,7 +84,7 @@ model: { provider: router, id: basic }
   assert.deepEqual(config.hosts[1]?.egress?.base, ["10.0.0.9"]);
 });
 
-test("substitutes ${env:...} references", () => {
+test("substitutes environment references", () => {
   const config = loadRuntimeConfig({ filePath: write(withToken), env: { KANBAN_TOKEN: "bdsk_x" } });
   assert.equal(config.board.token, "bdsk_x");
 });

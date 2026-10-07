@@ -66,7 +66,7 @@ const REVIEWER = { verdict: "approve", note: "ok", merge_sha: "m" };
 function assistant(text: string): { info: { role: string }; parts: Array<{ type: string; text: string }> } {
   return { info: { role: "assistant" }, parts: [{ type: "text", text }] };
 }
-const fenced = (value: unknown): string => "```json\n" + JSON.stringify(value) + "\n```";
+const fenced = (value: unknown): string => `\`\`\`json\n${JSON.stringify(value)}\n\`\`\``;
 
 test("runs an author turn and parses the json handoff", async () => {
   const { impl, calls } = fakeFetch([
