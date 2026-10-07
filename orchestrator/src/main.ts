@@ -1,5 +1,5 @@
 import { loadRuntimeConfig } from "./runtime-config.ts";
-import { createDaemon } from "./daemon/index.ts";
+import { createDaemon, startStatusServer } from "./daemon/index.ts";
 import type { Role } from "./capability/types.ts";
 
 const USAGE = `fleet orchestrator
@@ -98,6 +98,19 @@ export async function run(
       );
     }
 
+    const statusServer = await startStatusServer(
+      config.observability.statusPort,
+      handle.daemon,
+    ).catch((error: unknown) => {
+      console.error(
+        `[daemon] status server error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    });
+    if (statusServer !== null) {
+      console.error(`[daemon] status on :${config.observability.statusPort} (/health, /tasks)`);
+    }
+
     // Event-driven: react to board changes immediately; poll as a fallback.
     const controller = new AbortController();
     let scheduled: ReturnType<typeof setTimeout> | null = null;
@@ -117,6 +130,7 @@ export async function run(
     }
     controller.abort();
     await handle.daemon.waitIdle();
+    statusServer?.close();
     handle.close();
     console.error("[daemon] stopped");
     return 0;
