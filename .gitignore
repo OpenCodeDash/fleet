@@ -15,3 +15,4 @@ dist/
 # local runtime config + state
 orchestrator.yaml
 *.sqlite*
+fleet-events.jsonl
