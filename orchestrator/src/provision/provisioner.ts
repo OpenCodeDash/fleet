@@ -40,8 +40,18 @@ export class ContainerProvisioner {
 
   async provision(spec: ContainerSpec): Promise<ContainerHandle> {
     const handle = await this.backend.start(spec);
-    await this.waitReady(handle);
-    return handle;
+    try {
+      await this.waitReady(handle);
+      return handle;
+    } catch (error) {
+      // Don't leak a container that booted but never served.
+      try {
+        await this.backend.stop(handle);
+      } catch {
+        // best-effort
+      }
+      throw error;
+    }
   }
 
   async destroy(handle: ContainerHandle): Promise<void> {

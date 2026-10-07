@@ -70,39 +70,47 @@ export class NixosContainerBackend implements ContainerBackend {
       `start container "${spec.name}"`,
     );
 
-    if (this.dns.length > 0) {
-      // Best-effort: give the container a reachable resolver.
-      await this.runner.run(
-        "nixos-container",
-        ["run", spec.name, "--", "tee", "/etc/resolv.conf"],
-        { input: `${this.dns.map((server) => `nameserver ${server}`).join("\n")}\n` },
-      );
-    }
+    try {
+      if (this.dns.length > 0) {
+        // Best-effort: give the container a reachable resolver.
+        await this.runner.run(
+          "nixos-container",
+          ["run", spec.name, "--", "tee", "/etc/resolv.conf"],
+          { input: `${this.dns.map((server) => `nameserver ${server}`).join("\n")}\n` },
+        );
+      }
 
-    const ipResult = await this.runner.run("nixos-container", ["show-ip", spec.name]);
-    const ip = ipResult.stdout.trim();
-    if (ipResult.code !== 0 || ip.length === 0) {
-      throw new ProvisionError(`container "${spec.name}" started but reported no IP`);
+      const ipResult = await this.runner.run("nixos-container", ["show-ip", spec.name]);
+      const ip = ipResult.stdout.trim();
+      if (ipResult.code !== 0 || ip.length === 0) {
+        throw new ProvisionError(`container "${spec.name}" started but reported no IP`);
+      }
+      if (this.registrar !== undefined && spec.egress !== undefined) {
+        // Register before returning: the allowlist must be in place before the agent runs.
+        await this.registrar.register(ip, spec.egress.allowlist);
+      }
+      const handle: ContainerHandle = {
+        name: spec.name,
+        spec,
+        address: `http://${ip}:${spec.port}`,
+        client: ip,
+      };
+      if (this.tunnel === undefined) {
+        return handle;
+      }
+      const tunnel = this.tunnel(ip, spec.port);
+      return {
+        ...handle,
+        address: `http://127.0.0.1:${tunnel.localPort}`,
+        close: () => tunnel.close(),
+      };
+    } catch (error) {
+      // The container exists as soon as it is created, so never leave it behind if anything
+      // after `start` fails (e.g. the egress admin is unreachable). Best-effort cleanup.
+      await this.runner.run("nixos-container", ["terminate", spec.name]);
+      await this.runner.run("nixos-container", ["destroy", spec.name]);
+      throw error;
     }
-    if (this.registrar !== undefined && spec.egress !== undefined) {
-      // Register before returning: the allowlist must be in place before the agent runs.
-      await this.registrar.register(ip, spec.egress.allowlist);
-    }
-    const handle: ContainerHandle = {
-      name: spec.name,
-      spec,
-      address: `http://${ip}:${spec.port}`,
-      client: ip,
-    };
-    if (this.tunnel === undefined) {
-      return handle;
-    }
-    const tunnel = this.tunnel(ip, spec.port);
-    return {
-      ...handle,
-      address: `http://127.0.0.1:${tunnel.localPort}`,
-      close: () => tunnel.close(),
-    };
   }
 
   async stop(handle: ContainerHandle): Promise<void> {

@@ -161,6 +161,41 @@ test("provision retries readiness then times out", async () => {
   );
 });
 
+test("start destroys the container when egress registration fails", async () => {
+  const { runner, calls } = recordingRunner([ok(), ok(), ok(), ok(), ok("10.233.1.2\n"), ok(), ok()]);
+  const registrar = {
+    async register() {
+      throw new Error("fetch failed");
+    },
+    async unregister() {},
+  };
+  const backend = new NixosContainerBackend(runner, { registrar });
+  await assert.rejects(
+    () => backend.start({ ...spec, egress: { allowlist: ["github.com"] } }),
+    /fetch failed/,
+  );
+  const containerCmds = calls
+    .filter((call) => call.command === "nixos-container")
+    .map((call) => call.args[0]);
+  assert.deepEqual(containerCmds, ["create", "start", "show-ip", "terminate", "destroy"]);
+});
+
+test("provision destroys the container when it never becomes ready", async () => {
+  const backend = fakeBackend();
+  const dead = fakeFetch([{ ok: false }]);
+  await assert.rejects(
+    () =>
+      new ContainerProvisioner(backend.backend, {
+        fetchImpl: dead.impl,
+        readyTimeoutMs: 0,
+        sleep: noSleep,
+      }).provision(spec),
+    (error: unknown) =>
+      error instanceof ProvisionError && /did not become ready/.test((error as Error).message),
+  );
+  assert.deepEqual(backend.stopped, ["fleet-1"]);
+});
+
 test("opens a tunnel for a remote orchestrator and closes it on stop", async () => {
   const { runner } = recordingRunner([ok(), ok(), ok(), ok(), ok("10.233.1.2\n")]);
   let closed = false;
