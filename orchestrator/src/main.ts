@@ -51,22 +51,52 @@ export async function run(
   if (command === "run") {
     const interval = Number(env.FLEET_POLL_MS ?? "15000");
     let running = true;
+    let ticking = false;
+    let pending = false;
+    const tick = async (): Promise<void> => {
+      if (ticking) {
+        pending = true;
+        return;
+      }
+      ticking = true;
+      try {
+        await handle.daemon.tick();
+      } catch (error) {
+        console.error(
+          `[daemon] tick error: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      ticking = false;
+      if (pending && running) {
+        pending = false;
+        void tick();
+      }
+    };
     const stop = (): void => {
       running = false;
       handle.daemon.stop();
     };
     process.on("SIGTERM", stop);
     process.on("SIGINT", stop);
-    console.error(`[daemon] polling the board every ${interval}ms (ctrl-c to stop)`);
+
+    // Event-driven: react to board changes immediately; poll as a fallback.
+    const controller = new AbortController();
+    let scheduled: ReturnType<typeof setTimeout> | null = null;
+    void handle.board.subscribeEvents(() => {
+      if (scheduled !== null) return;
+      scheduled = setTimeout(() => {
+        scheduled = null;
+        void tick();
+      }, 250);
+    }, controller.signal);
+
+    console.error(`[daemon] subscribed to board events; polling every ${interval}ms`);
     while (running) {
-      try {
-        await handle.daemon.tick();
-      } catch (error) {
-        console.error(`[daemon] tick error: ${error instanceof Error ? error.message : String(error)}`);
-      }
+      await tick();
       if (!running) break;
       await new Promise((resolve) => setTimeout(resolve, interval));
     }
+    controller.abort();
     await handle.daemon.waitIdle();
     handle.close();
     console.error("[daemon] stopped");

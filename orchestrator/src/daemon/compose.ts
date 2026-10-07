@@ -23,6 +23,7 @@ import type { Candidate, DaemonDeps } from "./types.ts";
 export interface DaemonHandle {
   daemon: FleetDaemon;
   state: SqliteStateStore;
+  board: BoardClient;
   /** Run a single attempt for a task id (the `once` debug command). */
   runOnce(taskId: number, role: Role): Promise<void>;
   close(): void;
@@ -196,5 +197,5 @@ export function createDaemon(
     await daemon.runCandidate({ task: found.task, column: found.column, role }, host);
   };
 
-  return { daemon, state, runOnce, close: () => state.close() };
+  return { daemon, state, board, runOnce, close: () => state.close() };
 }

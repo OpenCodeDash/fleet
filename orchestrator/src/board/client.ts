@@ -1,4 +1,5 @@
 import type { Board, BoardSummary, Column, MoveTaskInput, Task, UpdateTaskInput } from "./types.ts";
+import { SseParser } from "../observability/index.ts";
 
 export class BoardError extends Error {
   readonly status: number;
@@ -96,6 +97,37 @@ export class BoardClient {
       `/kanban/${boardId}/columns/${columnId}/tasks/${taskId}`,
       input,
     );
+  }
+
+  /**
+   * Subscribe to the server's SSE event stream (`/events`) — the same stream dash consumes.
+   * Resolves when the stream ends or the signal aborts.
+   */
+  async subscribeEvents(onEvent: (event: unknown) => void, signal?: AbortSignal): Promise<void> {
+    const doFetch = this.fetchImpl;
+    const response = await doFetch(`${this.url}/events`, {
+      headers: { ...this.headers, accept: "text/event-stream" },
+      ...(signal === undefined ? {} : { signal }),
+    });
+    if (!response.ok || response.body === null) return;
+    const parser = new SseParser();
+    const decoder = new TextDecoder();
+    try {
+      for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
+        const text = typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
+        for (const frame of parser.push(text)) {
+          let data: unknown = frame.data;
+          try {
+            data = JSON.parse(frame.data);
+          } catch {
+            // keep the raw string
+          }
+          onEvent(data);
+        }
+      }
+    } catch {
+      // stream ended or was aborted
+    }
   }
 }
 

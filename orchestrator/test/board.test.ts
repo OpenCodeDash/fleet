@@ -164,3 +164,12 @@ test("maps a non-JSON error body to a BoardError with the HTTP status", async ()
     (error: unknown) => error instanceof BoardError && (error as BoardError).status === 500,
   );
 });
+
+test("subscribeEvents parses the SSE stream and calls the handler", async () => {
+  const sse = 'data: {"type":"task.created","boardId":"b1"}\n\ndata: {"type":"task.moved"}\n\n';
+  const impl = (async () => new Response(sse, { status: 200 })) as typeof fetch;
+  const client = new BoardClient({ url: "http://board:3000", fetchImpl: impl });
+  const events: unknown[] = [];
+  await client.subscribeEvents((event) => events.push(event));
+  assert.deepEqual(events, [{ type: "task.created", boardId: "b1" }, { type: "task.moved" }]);
+});
