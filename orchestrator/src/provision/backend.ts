@@ -18,6 +18,12 @@ export interface ContainerBackendOptions {
    * cannot reach the container's host-private address directly.
    */
   tunnel?: TunnelFactory;
+  /**
+   * Nameservers to write into the container's /etc/resolv.conf. `nixos-container` copies the
+   * host's resolv.conf (the host's resolved stub 127.0.0.53), which is unreachable from the
+   * container; this overrides it so DNS works.
+   */
+  dns?: string[];
 }
 
 const CONFIG_DIR = "/run/fleet";
@@ -31,10 +37,12 @@ const CONFIG_DIR = "/run/fleet";
 export class NixosContainerBackend implements ContainerBackend {
   private readonly runner: CommandRunner;
   private readonly tunnel: TunnelFactory | undefined;
+  private readonly dns: string[];
 
   constructor(runner: CommandRunner, options: ContainerBackendOptions = {}) {
     this.runner = runner;
     this.tunnel = options.tunnel;
+    this.dns = options.dns ?? [];
   }
 
   async start(spec: ContainerSpec): Promise<ContainerHandle> {
@@ -53,6 +61,15 @@ export class NixosContainerBackend implements ContainerBackend {
       ["start", spec.name],
       `start container "${spec.name}"`,
     );
+
+    if (this.dns.length > 0) {
+      // Best-effort: give the container a reachable resolver.
+      await this.runner.run(
+        "nixos-container",
+        ["run", spec.name, "--", "tee", "/etc/resolv.conf"],
+        { input: `${this.dns.map((server) => `nameserver ${server}`).join("\n")}\n` },
+      );
+    }
 
     const ipResult = await this.runner.run("nixos-container", ["show-ip", spec.name]);
     const ip = ipResult.stdout.trim();

@@ -38,6 +38,8 @@ export interface RuntimeOptions {
   onProgress?: (message: string) => void;
   /** Extra env injected into every container (provider keys, git token, ...). */
   injectEnv?: Record<string, string>;
+  /** Nameservers to write into containers (default 1.1.1.1 / 8.8.8.8). */
+  dns?: string[];
 }
 
 export interface Runtime {
@@ -86,7 +88,10 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       })
     : undefined;
   const provisioner = new ContainerProvisioner(
-    new NixosContainerBackend(commandRunner, tunnel === undefined ? {} : { tunnel }),
+    new NixosContainerBackend(commandRunner, {
+      ...(tunnel === undefined ? {} : { tunnel }),
+      dns: options.dns ?? ["1.1.1.1", "8.8.8.8"],
+    }),
   );
   // Verification uses the remote URL directly (no clone needed for author handoffs).
   const git = new CommandGitVerifier({
