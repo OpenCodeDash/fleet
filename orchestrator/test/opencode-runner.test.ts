@@ -164,16 +164,18 @@ test("throws AgentError when structured output is missing or invalid", async () 
   );
 });
 
-test("streams agent events to the log", async () => {
+test("streams assistant text and tool calls to the log", async () => {
   const logged: string[] = [];
   const sse =
-    'data: {"type":"message.part.updated","properties":{"tool":"bash"}}\n\n' +
-    'data: {"type":"session.idle","properties":{}}\n\n';
+    'data: {"type":"message.part.updated","properties":{"part":{"type":"text","id":"p1","text":"Hello"}}}\n\n' +
+    'data: {"type":"message.part.updated","properties":{"part":{"type":"text","id":"p1","text":"Hello world"}}}\n\n' +
+    'data: {"type":"message.part.updated","properties":{"part":{"type":"tool","tool":"bash","state":{"status":"running"}}}}\n\n';
   const impl = (async () => new Response(sse, { status: 200 })) as FetchLike;
   const runner = new OpencodeAgentRunner({ fetchImpl: impl, log: (m) => logged.push(m) });
-  await runner.streamEvents("http://x", "s1", new AbortController().signal);
-  assert.ok(logged.some((m) => /agent message\.part\.updated tool=bash/.test(m)));
-  assert.ok(logged.some((m) => /agent session\.idle/.test(m)));
+  await runner.streamEvents("http://x", new AbortController().signal);
+  assert.ok(logged.includes("assistant: Hello"));
+  assert.ok(logged.some((m) => m.startsWith("assistant:") && m.endsWith("world"))); // suffix only
+  assert.ok(logged.includes("tool: bash [running]"));
 });
 
 test("auto-approves permission requests", async () => {
@@ -188,11 +190,11 @@ test("auto-approves permission requests", async () => {
     return new Response(sse, { status: 200 });
   }) as FetchLike;
   const runner = new OpencodeAgentRunner({ fetchImpl: impl, autoApprove: true });
-  await runner.streamEvents("http://x", "s1", new AbortController().signal);
+  await runner.streamEvents("http://x", new AbortController().signal);
   await new Promise((resolve) => setTimeout(resolve, 10));
   const approval = calls.find((call) => call.method === "POST");
-  assert.equal(approval?.url, "http://x/session/s1/permissions/per_1");
-  assert.deepEqual(approval?.body, { response: "always" });
+  assert.equal(approval?.url, "http://x/permission/per_1/reply");
+  assert.deepEqual(approval?.body, { reply: "always" });
 });
 
 test("parse helpers validate their fields", () => {

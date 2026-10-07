@@ -53,18 +53,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** A short, readable summary of an event's `properties` (tool/name/status). */
-function summarizeEvent(data: unknown): string {
-  if (!isRecord(data) || !isRecord(data.properties)) return "";
-  const properties = data.properties;
-  const bits: string[] = [];
-  for (const key of ["tool", "name", "status", "reason"]) {
-    const value = properties[key];
-    if (typeof value === "string" && value.length > 0) bits.push(`${key}=${value}`);
-  }
-  return bits.length > 0 ? ` ${bits.join(" ")}` : "";
-}
-
 function asRecord(value: unknown, what: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new AgentError(`${what} must be an object`);
@@ -164,6 +152,8 @@ export class OpencodeAgentRunner {
   private readonly agent: string | undefined;
   private readonly log: ((message: string) => void) | undefined;
   private readonly autoApprove: boolean;
+  /** partID → characters of text already logged (so updates print only the suffix). */
+  private readonly partText = new Map<string, number>();
 
   constructor(options: OpencodeAgentRunnerOptions = {}) {
     this.fetchImpl = options.fetchImpl ?? fetch;
@@ -174,7 +164,7 @@ export class OpencodeAgentRunner {
   }
 
   /** Stream the container's `/event` SSE, logging a line per frame and auto-approving. */
-  async streamEvents(address: string, sessionId: string, signal: AbortSignal): Promise<void> {
+  async streamEvents(address: string, signal: AbortSignal): Promise<void> {
     if (this.log === undefined && !this.autoApprove) return;
     try {
       const response = await this.fetchImpl(`${address}/event`, {
@@ -186,14 +176,14 @@ export class OpencodeAgentRunner {
       const decoder = new TextDecoder();
       for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
         const text = typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
-        for (const frame of parser.push(text)) this.emit(frame, address, sessionId);
+        for (const frame of parser.push(text)) this.emit(frame, address);
       }
     } catch {
       // stream ended / aborted / tunnel closed — non-fatal
     }
   }
 
-  private emit(frame: SseFrame, address: string, sessionId: string): void {
+  private emit(frame: SseFrame, address: string): void {
     let data: unknown = frame.data;
     try {
       data = JSON.parse(frame.data);
@@ -202,17 +192,51 @@ export class OpencodeAgentRunner {
     }
     const type =
       isRecord(data) && typeof data.type === "string" ? data.type : (frame.event ?? "event");
-    const extra =
-      type.startsWith("permission") && isRecord(data) && isRecord(data.properties)
-        ? ` ${JSON.stringify(data.properties).slice(0, 200)}`
-        : summarizeEvent(data);
-    this.log?.(`agent ${type}${extra}`);
-    if (this.autoApprove && (type === "permission.asked" || type === "permission.updated")) {
-      void this.approve(address, sessionId, data);
+    const properties = isRecord(data) && isRecord(data.properties) ? data.properties : undefined;
+
+    if (type === "message.part.updated" && properties !== undefined && isRecord(properties.part)) {
+      this.emitPart(properties.part);
+      return;
+    }
+    if (type === "permission.asked" || type === "permission.updated") {
+      this.log?.(`permission ${JSON.stringify(properties ?? {}).slice(0, 200)}`);
+      if (this.autoApprove) void this.approve(address, data);
+      return;
+    }
+    if (type === "session.idle") {
+      this.log?.("idle");
+      return;
+    }
+    if (/error/i.test(type)) {
+      this.log?.(`${type} ${JSON.stringify(properties ?? {}).slice(0, 300)}`);
+      return;
+    }
+    // session.status / session.updated / plugin.added / heartbeat / deltas are noise.
+  }
+
+  /** Render a message part: assistant text, thinking, or a tool call. */
+  private emitPart(part: Record<string, unknown>): void {
+    const kind = part.type;
+    const id = typeof part.id === "string" ? part.id : undefined;
+    if ((kind === "text" || kind === "reasoning") && typeof part.text === "string") {
+      if (id === undefined) return;
+      const printed = this.partText.get(id) ?? 0;
+      const text = part.text;
+      if (text.length > printed) {
+        this.log?.(`${kind === "text" ? "assistant" : "thinking"}: ${text.slice(printed)}`);
+        this.partText.set(id, text.length);
+      }
+      return;
+    }
+    if (kind === "tool") {
+      const tool = typeof part.tool === "string" ? part.tool : "tool";
+      const state = isRecord(part.state) ? part.state : {};
+      const status = typeof state.status === "string" ? state.status : "";
+      this.log?.(`tool: ${tool}${status ? ` [${status}]` : ""}`);
     }
   }
 
-  private async approve(address: string, sessionId: string, data: unknown): Promise<void> {
+  private async approve(address: string, data: unknown): Promise<void> {
     if (!isRecord(data) || !isRecord(data.properties)) return;
     const properties = data.properties;
     const id =
@@ -223,7 +247,7 @@ export class OpencodeAgentRunner {
           : undefined;
     if (id === undefined) return;
     try {
-      await this.post(`${address}/session/${sessionId}/permissions/${id}`, { response: "always" });
+      await this.post(`${address}/permission/${id}/reply`, { reply: "always" });
       this.log?.(`approved permission ${id}`);
     } catch (error) {
       this.log?.(`permission approval failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -231,6 +255,7 @@ export class OpencodeAgentRunner {
   }
 
   async run(input: AgentRunInput): Promise<CompletionResult> {
+    this.partText.clear();
     const session = await this.post(`${input.address}/session`, { title: input.sessionTitle });
     const sessionId = readSessionId(session);
     await input.sink.record({
@@ -249,7 +274,7 @@ export class OpencodeAgentRunner {
 
     // Stream the container's events while the turn runs (best-effort, for live output).
     const abort = new AbortController();
-    void this.streamEvents(input.address, sessionId, abort.signal);
+    void this.streamEvents(input.address, abort.signal);
     try {
       const message = await this.post(`${input.address}/session/${sessionId}/message`, body);
       const structured = extractStructured(message);
