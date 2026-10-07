@@ -16,6 +16,12 @@
   documentation.enable = false;
   environment.systemPackages = [ pkgs.opencode pkgs.git ];
 
+  # nixos-container copies the host's /etc/resolv.conf (127.0.0.53, the host's resolved
+  # stub), which is unreachable from the container. Run resolved inside the container so
+  # that stub answers, forwarding to public upstreams.
+  services.resolved.enable = true;
+  networking.nameservers = [ "1.1.1.1" "8.8.8.8" ];
+
   # Agents push over HTTPS with a token injected at runtime as GITHUB_TOKEN; the helper reads
   # it from the environment, so the token is never baked into the image or the config.
   environment.etc."gitconfig".text = ''
