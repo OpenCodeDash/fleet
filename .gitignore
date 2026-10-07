@@ -11,3 +11,7 @@ dist/
 # local secrets / state
 .env
 *.local
+
+# local runtime config + state
+orchestrator.yaml
+*.sqlite*
