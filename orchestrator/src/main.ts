@@ -7,6 +7,7 @@ usage:
   run                      run the daemon (polls the board)
   once <taskId> <role>     run one attempt (author|reviewer)
   status                   print in-flight attempts
+  reconcile                reconcile the board against running containers
 env:
   FLEET_CONFIG             path to orchestrator.yaml (default ./orchestrator.yaml)
   FLEET_STATE_PATH         path to the state db (default ./fleet-state.sqlite)
@@ -48,6 +49,15 @@ export async function run(
     }
   }
 
+  if (command === "reconcile") {
+    try {
+      console.log(JSON.stringify(await handle.reconcile(), null, 2));
+      return 0;
+    } finally {
+      handle.close();
+    }
+  }
+
   if (command === "run") {
     const interval = Number(env.FLEET_POLL_MS ?? "15000");
     let running = true;
@@ -78,6 +88,15 @@ export async function run(
     };
     process.on("SIGTERM", stop);
     process.on("SIGINT", stop);
+
+    console.error("[daemon] reconciling board against running containers");
+    try {
+      await handle.reconcile();
+    } catch (error) {
+      console.error(
+        `[daemon] reconcile error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
 
     // Event-driven: react to board changes immediately; poll as a fallback.
     const controller = new AbortController();

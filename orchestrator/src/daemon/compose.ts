@@ -15,6 +15,8 @@ import { EventSink, JsonlEventStore } from "../observability/index.ts";
 import { NodeExecutor, SshCommandRunner, makeSshTunnelFactory } from "../remote/index.ts";
 import { NixosContainerBackend } from "../provision/backend.ts";
 import { ContainerProvisioner } from "../provision/provisioner.ts";
+import type { CommandRunner } from "../provision/types.ts";
+import { Reconciler, type ReconcileReport } from "../recovery/index.ts";
 import type { HostConfig, RepoConfig, RuntimeConfig } from "../runtime-config.ts";
 import { FleetDaemon } from "./daemon.ts";
 import { SqliteStateStore } from "./state.ts";
@@ -26,6 +28,8 @@ export interface DaemonHandle {
   board: BoardClient;
   /** Run a single attempt for a task id (the `once` debug command). */
   runOnce(taskId: number, role: Role): Promise<void>;
+  /** Reconcile the board against running containers (startup + the `reconcile` command). */
+  reconcile(): Promise<ReconcileReport>;
   close(): void;
 }
 
@@ -110,6 +114,7 @@ export function createDaemon(
   const inject = injectEnvFromEnv(env);
 
   const provisioners = new Map<string, ContainerProvisioner>();
+  const runners = new Map<string, CommandRunner>();
   for (const host of config.hosts) {
     const local = new NodeExecutor();
     const sshExtra = host.ssh.key === undefined ? [] : ["-i", host.ssh.key, "-o", "IdentitiesOnly=yes"];
@@ -119,6 +124,7 @@ export function createDaemon(
       extraArgs: sshExtra,
       executor: local,
     });
+    runners.set(host.name, runner);
     const tunnel = makeSshTunnelFactory({
       target: host.ssh.user === undefined ? host.ssh.host : `${host.ssh.user}@${host.ssh.host}`,
       extraArgs: sshExtra,
@@ -197,5 +203,43 @@ export function createDaemon(
     await daemon.runCandidate({ task: found.task, column: found.column, role }, host);
   };
 
-  return { daemon, state, board, runOnce, close: () => state.close() };
+  const reconcile = async (): Promise<ReconcileReport> => {
+    let hostOf = new Map<string, string>();
+    const reconciler = new Reconciler({
+      inProgressTasks: async () =>
+        state.running().map((record) => ({
+          taskId: String(record.taskId),
+          containerId: record.containerId,
+          capabilityHash: record.capabilityHash,
+        })),
+      runningContainers: async () => {
+        hostOf = new Map();
+        for (const [hostName, runner] of runners) {
+          const result = await runner.run("nixos-container", ["list"]);
+          for (const name of result.stdout
+            .split("\n")
+            .map((entry) => entry.trim())
+            .filter((entry) => entry.length > 0)) {
+            hostOf.set(name, hostName);
+          }
+        }
+        return [...hostOf.keys()].map((containerId) => ({ containerId, capabilityHash: null }));
+      },
+      destroyContainer: async (containerId) => {
+        const runner = runners.get(hostOf.get(containerId) ?? "");
+        if (runner !== undefined) {
+          await runner.run("nixos-container", ["terminate", containerId]);
+          await runner.run("nixos-container", ["destroy", containerId]);
+        }
+      },
+      revokeCredentials: (containerId) => broker.revoke(containerId),
+      requeue: async (taskId) => {
+        await boardPort.moveTo(taskId, config.board.queues.author[0] ?? "Todo");
+        state.stopRunning(Number(taskId));
+      },
+    });
+    return reconciler.reconcile();
+  };
+
+  return { daemon, state, board, runOnce, reconcile, close: () => state.close() };
 }
