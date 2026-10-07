@@ -32,15 +32,10 @@
   # host's proxy and the host can reach each container's opencode server. See ADR 0012.
   networking.useNetworkd = true;
   networking.firewall.enable = true;
-  # The off-box orchestrator connects over SSH; 3129 is the egress admin port.
-  networking.firewall.allowedTCPPorts = [ 22 3129 ];
-
-  # Containers may reach only the egress proxy on the host. There is deliberately no NAT, so
-  # the proxy is the sole path off the container network (ADR 0008); anything not on a
-  # container's registered allowlist is denied.
-  networking.firewall.extraInputRules = ''
-    ip saddr 10.233.0.0/16 tcp dport 3128 accept
-  '';
+  # The off-box orchestrator connects over SSH. 3128 is the container egress proxy and 3129
+  # the admin port; the proxy is default-deny, so exposing its port is safe. (Note:
+  # `extraInputRules` did not take effect on the running host, so the port is allowed here.)
+  networking.firewall.allowedTCPPorts = [ 22 3128 3129 ];
 
   # Uplink DHCP — the nspawn zone only serves the containers themselves, so the host's own
   # NIC needs an address to reach the board, git and the Nix cache. `en*`/`eth*` covers

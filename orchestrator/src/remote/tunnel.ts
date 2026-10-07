@@ -34,13 +34,25 @@ export function makeSshTunnelFactory(options: SshTunnelOptions): TunnelFactory {
         "ExitOnForwardFailure=yes",
         "-o",
         "BatchMode=yes",
+        // Keep the connection alive across idle periods so NAT/firewalls don't drop the
+        // forward while the container is thinking (a dropped tunnel surfaces as
+        // "fetch failed" on the next request).
+        "-o",
+        "ServerAliveInterval=15",
+        "-o",
+        "ServerAliveCountMax=4",
+        "-o",
+        "TCPKeepAlive=yes",
+        "-o",
+        "ConnectTimeout=10",
         "-N",
         "-L",
         `127.0.0.1:${localPort}:${remoteHost}:${remotePort}`,
         options.target,
         ...(options.extraArgs ?? []),
       ],
-      { stdio: "ignore" },
+      // ssh stderr goes to ours so tunnel failures are visible instead of silent.
+      { stdio: ["ignore", "ignore", "inherit"] },
     );
     return { localPort, close: () => child.kill() };
   };
