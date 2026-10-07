@@ -18,7 +18,6 @@ interface Call {
 
 interface MessageBody {
   parts: Array<{ type: string; text: string }>;
-  format: { type: string; schema: { properties: Record<string, Record<string, unknown>> } };
   model?: unknown;
   agent?: string;
 }
@@ -64,10 +63,15 @@ const runInput = (role: "author" | "reviewer"): AgentRunInput => ({
 const AUTHOR = { status: "done", branch: "feat/x", head_sha: "a", base_sha: "b", summary: "s" };
 const REVIEWER = { verdict: "approve", note: "ok", merge_sha: "m" };
 
-test("runs an author turn and parses the structured result", async () => {
+function assistant(text: string): { info: { role: string }; parts: Array<{ type: string; text: string }> } {
+  return { info: { role: "assistant" }, parts: [{ type: "text", text }] };
+}
+const fenced = (value: unknown): string => "```json\n" + JSON.stringify(value) + "\n```";
+
+test("runs an author turn and parses the json handoff", async () => {
   const { impl, calls } = fakeFetch([
     { body: { id: "ses_1" } },
-    { body: { info: { structured: AUTHOR } } },
+    { body: assistant(`Done.\n${fenced(AUTHOR)}`) },
   ]);
   const result = await new OpencodeAgentRunner({ fetchImpl: impl }).run(runInput("author"));
 
@@ -75,39 +79,18 @@ test("runs an author turn and parses the structured result", async () => {
   assert.equal(calls[0]?.url, "http://10.0.0.9:4096/session");
   assert.equal(calls[1]?.url, "http://10.0.0.9:4096/session/ses_1/message");
   const body = calls[1]?.body as MessageBody;
-  assert.equal(body.parts[0]?.text, "do it");
-  assert.equal(body.format.type, "json_schema");
-  assert.equal(body.format.schema.properties.status?.const, "done");
+  assert.match(body.parts[0]?.text ?? "", /do it/);
+  assert.match(body.parts[0]?.text ?? "", /fenced json block/);
 });
 
-test("surfaces a terminal agent error (e.g. StructuredOutputError)", async () => {
-  const { impl } = fakeFetch([
-    { body: { id: "ses" } },
-    { body: { info: { error: { name: "StructuredOutputError", data: { message: "bad", retries: 2 } } } } },
-  ]);
-  await assert.rejects(
-    () => new OpencodeAgentRunner({ fetchImpl: impl }).run(runInput("author")),
-    (error: unknown) => error instanceof AgentError && /StructuredOutputError/.test((error as Error).message),
-  );
-});
-
-test("runs a reviewer turn with the reviewer schema", async () => {
-  const { impl, calls } = fakeFetch([
-    { body: { id: "ses_2" } },
-    { body: { info: { structured: REVIEWER } } },
-  ]);
+test("runs a reviewer turn", async () => {
+  const { impl } = fakeFetch([{ body: { id: "ses_2" } }, { body: assistant(fenced(REVIEWER)) }]);
   const result = await new OpencodeAgentRunner({ fetchImpl: impl }).run(runInput("reviewer"));
-
   assert.deepEqual(result, { kind: "reviewer", result: REVIEWER });
-  const body = calls[1]?.body as MessageBody;
-  assert.deepEqual(body.format.schema.properties.verdict?.enum, ["approve", "changes"]);
 });
 
 test("passes model and agent when configured", async () => {
-  const { impl, calls } = fakeFetch([
-    { body: { id: "ses" } },
-    { body: { info: { structured: AUTHOR } } },
-  ]);
+  const { impl, calls } = fakeFetch([{ body: { id: "ses" } }, { body: assistant(fenced(AUTHOR)) }]);
   await new OpencodeAgentRunner({
     fetchImpl: impl,
     model: { providerID: "anthropic", modelID: "claude" },
@@ -128,10 +111,7 @@ test("records lifecycle events on the sink", async () => {
     sessionTitle: "#1",
     sink: new EventSink({ store, correlation }),
   };
-  const { impl } = fakeFetch([
-    { body: { id: "ses" } },
-    { body: { info: { structured: AUTHOR } } },
-  ]);
+  const { impl } = fakeFetch([{ body: { id: "ses" } }, { body: assistant(fenced(AUTHOR)) }]);
   await new OpencodeAgentRunner({ fetchImpl: impl }).run(input);
   assert.deepEqual(
     store.events.map((event) => event.type),
@@ -147,20 +127,29 @@ test("throws AgentError on a non-ok response", async () => {
   );
 });
 
-test("throws AgentError when structured output is missing or invalid", async () => {
-  const missing = fakeFetch([{ body: { id: "ses" } }, { body: { info: {} } }]);
-  await assert.rejects(
-    () => new OpencodeAgentRunner({ fetchImpl: missing.impl }).run(runInput("author")),
-    AgentError,
-  );
-
-  const invalid = fakeFetch([
+test("surfaces a terminal agent error", async () => {
+  const { impl } = fakeFetch([
     { body: { id: "ses" } },
-    { body: { info: { structured: { status: "done" } } } },
+    { body: { info: { error: { name: "StructuredOutputError", data: { message: "bad" } } }, parts: [] } },
   ]);
   await assert.rejects(
+    () => new OpencodeAgentRunner({ fetchImpl: impl }).run(runInput("author")),
+    (error: unknown) =>
+      error instanceof AgentError && /StructuredOutputError/.test((error as Error).message),
+  );
+});
+
+test("throws when the handoff block is missing or invalid", async () => {
+  const missing = fakeFetch([{ body: { id: "ses" } }, { body: assistant("no block here") }]);
+  await assert.rejects(
+    () => new OpencodeAgentRunner({ fetchImpl: missing.impl }).run(runInput("author")),
+    (error: unknown) => error instanceof AgentError && /handoff block/.test((error as Error).message),
+  );
+
+  const invalid = fakeFetch([{ body: { id: "ses" } }, { body: assistant("```json\n{not json}\n```") }]);
+  await assert.rejects(
     () => new OpencodeAgentRunner({ fetchImpl: invalid.impl }).run(runInput("author")),
-    AgentError,
+    (error: unknown) => error instanceof AgentError && /invalid json/.test((error as Error).message),
   );
 });
 
@@ -174,7 +163,7 @@ test("streams assistant text and tool calls to the log", async () => {
   const runner = new OpencodeAgentRunner({ fetchImpl: impl, log: (m) => logged.push(m) });
   await runner.streamEvents("http://x", new AbortController().signal);
   assert.ok(logged.includes("assistant: Hello"));
-  assert.ok(logged.some((m) => m.startsWith("assistant:") && m.endsWith("world"))); // suffix only
+  assert.ok(logged.some((m) => m.startsWith("assistant:") && m.endsWith("world")));
   assert.ok(logged.includes("tool: bash [running]"));
 });
 

@@ -1,5 +1,6 @@
 import type { AgentRunInput, AuthorResult, CompletionResult, ReviewerResult } from "../loop/types.ts";
 import type { FetchLike } from "../provision/types.ts";
+import type { Role } from "../capability/types.ts";
 import { SseParser, type SseFrame } from "../observability/index.ts";
 
 export class AgentError extends Error {
@@ -9,33 +10,52 @@ export class AgentError extends Error {
   }
 }
 
-/** opencode structured-output schema for the author handoff. */
-const AUTHOR_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    status: { const: "done" },
-    branch: { type: "string" },
-    head_sha: { type: "string" },
-    base_sha: { type: "string" },
-    pr_url: { type: "string" },
-    summary: { type: "string" },
-  },
-  required: ["status", "branch", "head_sha", "base_sha", "summary"],
-} as const;
+/** Instruction appended to the prompt: end with a fenced JSON handoff block. */
+function handoffInstruction(role: Role): string {
+  const shape =
+    role === "author"
+      ? '{"status":"done","branch":"<branch>","head_sha":"<sha>","base_sha":"<sha>","summary":"<summary>"}'
+      : '{"verdict":"approve"|"changes","note":"<note>","merge_sha":"<sha when approving>"}';
+  return [
+    "When you are finished, end your reply with a single fenced json block and nothing after it:",
+    "```json",
+    shape,
+    "```",
+    "Fill in the real values. Do not call any more tools after this.",
+  ].join("\n");
+}
 
-/** opencode structured-output schema for the reviewer verdict. */
-const REVIEWER_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    verdict: { enum: ["approve", "changes"] },
-    note: { type: "string" },
-    merge_sha: { type: "string" },
-    pr_review_comments: { type: "array", items: { type: "string" } },
-  },
-  required: ["verdict", "note"],
-} as const;
+/** Concatenate the text of an assistant message's text parts. */
+function textOf(message: unknown): string {
+  if (!isRecord(message) || !Array.isArray(message.parts)) return "";
+  return message.parts
+    .filter(
+      (part): part is { type: string; text: string } =>
+        isRecord(part) && part.type === "text" && typeof part.text === "string",
+    )
+    .map((part) => part.text)
+    .join("\n");
+}
+
+/** Extract and parse the fenced json handoff block from the assistant message. */
+function extractHandoff(message: unknown): unknown {
+  if (isRecord(message) && isRecord(message.info) && message.info.error != null) {
+    const error = message.info.error;
+    const name = isRecord(error) && typeof error.name === "string" ? error.name : "error";
+    const detail = isRecord(error) && isRecord(error.data) && typeof error.data.message === "string"
+      ? error.data.message
+      : JSON.stringify(error).slice(0, 200);
+    throw new AgentError(`agent failed: ${name} — ${detail}`);
+  }
+  const text = textOf(message);
+  const match = /```json\s*([\s\S]*?)```/.exec(text) ?? /```\s*([\s\S]*?)```/.exec(text);
+  if (match === null) throw new AgentError("agent did not return a ```json handoff block");
+  try {
+    return JSON.parse((match[1] ?? "").trim());
+  } catch {
+    throw new AgentError("agent returned an invalid json handoff block");
+  }
+}
 
 export interface OpencodeAgentRunnerOptions {
   fetchImpl?: FetchLike;
@@ -47,6 +67,8 @@ export interface OpencodeAgentRunnerOptions {
   log?: (message: string) => void;
   /** Auto-approve `permission.asked` events (headless runs have no one to approve). */
   autoApprove?: boolean;
+  /** Abort the agent turn after this many ms (default 300000). */
+  turnTimeoutMs?: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -81,27 +103,6 @@ function readSessionId(value: unknown): string {
     throw new AgentError("session create response had no id");
   }
   return session.id;
-}
-
-function extractStructured(message: unknown): unknown {
-  const record = asRecord(message, "message response");
-  const info = record.info;
-  if (isRecord(info)) {
-    // The assistant message carries a terminal error when the turn failed.
-    if (info.error !== undefined && info.error !== null) {
-      const error = isRecord(info.error) ? info.error : {};
-      const name = typeof error.name === "string" ? error.name : "error";
-      const data = isRecord(error.data) ? error.data : {};
-      const detail =
-        typeof data.message === "string" ? data.message : JSON.stringify(error).slice(0, 200);
-      throw new AgentError(`agent failed: ${name} — ${detail}`);
-    }
-    // opencode stores the schema'd result on the assistant message as `structured`.
-    if (info.structured !== undefined && info.structured !== null) return info.structured;
-  }
-  if (record.structured !== undefined && record.structured !== null) return record.structured;
-  if (record.structured_output !== undefined) return record.structured_output;
-  throw new AgentError("opencode response did not include structured output");
 }
 
 export function parseAuthorResult(value: unknown): AuthorResult {
@@ -152,6 +153,7 @@ export class OpencodeAgentRunner {
   private readonly agent: string | undefined;
   private readonly log: ((message: string) => void) | undefined;
   private readonly autoApprove: boolean;
+  private readonly turnTimeoutMs: number;
   /** partID → characters of text already logged (so updates print only the suffix). */
   private readonly partText = new Map<string, number>();
 
@@ -161,6 +163,7 @@ export class OpencodeAgentRunner {
     this.agent = options.agent;
     this.log = options.log;
     this.autoApprove = options.autoApprove ?? false;
+    this.turnTimeoutMs = options.turnTimeoutMs ?? 300_000;
   }
 
   /** Stream the container's `/event` SSE, logging a line per frame and auto-approving. */
@@ -264,10 +267,8 @@ export class OpencodeAgentRunner {
       data: { session: sessionId, role: input.role },
     });
 
-    const schema = input.role === "author" ? AUTHOR_SCHEMA : REVIEWER_SCHEMA;
     const body: Record<string, unknown> = {
-      parts: [{ type: "text", text: input.prompt }],
-      format: { type: "json_schema", schema },
+      parts: [{ type: "text", text: `${input.prompt}\n${handoffInstruction(input.role)}` }],
     };
     if (this.agent !== undefined) body.agent = this.agent;
     if (this.model !== undefined) body.model = this.model;
@@ -275,9 +276,14 @@ export class OpencodeAgentRunner {
     // Stream the container's events while the turn runs (best-effort, for live output).
     const abort = new AbortController();
     void this.streamEvents(input.address, abort.signal);
+    const timer = setTimeout(() => abort.abort(), this.turnTimeoutMs);
     try {
-      const message = await this.post(`${input.address}/session/${sessionId}/message`, body);
-      const structured = extractStructured(message);
+      const message = await this.post(
+        `${input.address}/session/${sessionId}/message`,
+        body,
+        abort.signal,
+      );
+      const structured = extractHandoff(message);
       await input.sink.record({
         source: "lifecycle",
         type: "agent-result",
@@ -287,16 +293,23 @@ export class OpencodeAgentRunner {
       return input.role === "author"
         ? { kind: "author", result: parseAuthorResult(structured) }
         : { kind: "reviewer", result: parseReviewerResult(structured) };
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new AgentError(`agent turn exceeded ${this.turnTimeoutMs}ms`);
+      }
+      throw error;
     } finally {
+      clearTimeout(timer);
       abort.abort();
     }
   }
 
-  private async post(url: string, body: unknown): Promise<unknown> {
+  private async post(url: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
     const response = await this.fetchImpl(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
+      ...(signal === undefined ? {} : { signal }),
     });
     const text = await response.text();
     let data: unknown = null;
