@@ -97,6 +97,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   const agentRunner = new OpencodeAgentRunner({
     model: options.model,
     agent: options.agent,
+    autoApprove: true,
     ...(options.onProgress === undefined ? {} : { log: options.onProgress }),
   });
   const broker = new CredentialBroker({

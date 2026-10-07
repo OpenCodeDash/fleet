@@ -45,6 +45,8 @@ export interface OpencodeAgentRunnerOptions {
   agent?: string;
   /** Receives a line per container event (tool calls, steps) — for live CLI output. */
   log?: (message: string) => void;
+  /** Auto-approve `permission.asked` events (headless runs have no one to approve). */
+  autoApprove?: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -150,17 +152,19 @@ export class OpencodeAgentRunner {
   private readonly model: { providerID: string; modelID: string } | undefined;
   private readonly agent: string | undefined;
   private readonly log: ((message: string) => void) | undefined;
+  private readonly autoApprove: boolean;
 
   constructor(options: OpencodeAgentRunnerOptions = {}) {
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.model = options.model;
     this.agent = options.agent;
     this.log = options.log;
+    this.autoApprove = options.autoApprove ?? false;
   }
 
-  /** Stream the container's `/event` SSE, logging a line per frame. Ends on abort/close. */
-  async streamEvents(address: string, signal: AbortSignal): Promise<void> {
-    if (this.log === undefined) return;
+  /** Stream the container's `/event` SSE, logging a line per frame and auto-approving. */
+  async streamEvents(address: string, sessionId: string, signal: AbortSignal): Promise<void> {
+    if (this.log === undefined && !this.autoApprove) return;
     try {
       const response = await this.fetchImpl(`${address}/event`, {
         headers: { accept: "text/event-stream" },
@@ -171,22 +175,48 @@ export class OpencodeAgentRunner {
       const decoder = new TextDecoder();
       for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
         const text = typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
-        for (const frame of parser.push(text)) this.emit(frame);
+        for (const frame of parser.push(text)) this.emit(frame, address, sessionId);
       }
     } catch {
       // stream ended / aborted / tunnel closed — non-fatal
     }
   }
 
-  private emit(frame: SseFrame): void {
+  private emit(frame: SseFrame, address: string, sessionId: string): void {
     let data: unknown = frame.data;
     try {
       data = JSON.parse(frame.data);
     } catch {
       // leave as a raw string
     }
-    const type = isRecord(data) && typeof data.type === "string" ? data.type : (frame.event ?? "event");
-    this.log?.(`agent ${type}${summarizeEvent(data)}`);
+    const type =
+      isRecord(data) && typeof data.type === "string" ? data.type : (frame.event ?? "event");
+    const extra =
+      type.startsWith("permission") && isRecord(data) && isRecord(data.properties)
+        ? ` ${JSON.stringify(data.properties).slice(0, 200)}`
+        : summarizeEvent(data);
+    this.log?.(`agent ${type}${extra}`);
+    if (this.autoApprove && (type === "permission.asked" || type === "permission.updated")) {
+      void this.approve(address, sessionId, data);
+    }
+  }
+
+  private async approve(address: string, sessionId: string, data: unknown): Promise<void> {
+    if (!isRecord(data) || !isRecord(data.properties)) return;
+    const properties = data.properties;
+    const id =
+      typeof properties.id === "string"
+        ? properties.id
+        : typeof properties.permissionID === "string"
+          ? properties.permissionID
+          : undefined;
+    if (id === undefined) return;
+    try {
+      await this.post(`${address}/session/${sessionId}/permissions/${id}`, { response: "always" });
+      this.log?.(`approved permission ${id}`);
+    } catch (error) {
+      this.log?.(`permission approval failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   async run(input: AgentRunInput): Promise<CompletionResult> {
@@ -208,7 +238,7 @@ export class OpencodeAgentRunner {
 
     // Stream the container's events while the turn runs (best-effort, for live output).
     const abort = new AbortController();
-    void this.streamEvents(input.address, abort.signal);
+    void this.streamEvents(input.address, sessionId, abort.signal);
     try {
       const message = await this.post(`${input.address}/session/${sessionId}/message`, body);
       const structured = extractStructured(message);

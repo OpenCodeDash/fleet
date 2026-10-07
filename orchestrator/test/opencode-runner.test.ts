@@ -160,9 +160,28 @@ test("streams agent events to the log", async () => {
     'data: {"type":"session.idle","properties":{}}\n\n';
   const impl = (async () => new Response(sse, { status: 200 })) as FetchLike;
   const runner = new OpencodeAgentRunner({ fetchImpl: impl, log: (m) => logged.push(m) });
-  await runner.streamEvents("http://x", new AbortController().signal);
+  await runner.streamEvents("http://x", "s1", new AbortController().signal);
   assert.ok(logged.some((m) => /agent message\.part\.updated tool=bash/.test(m)));
   assert.ok(logged.some((m) => /agent session\.idle/.test(m)));
+});
+
+test("auto-approves permission requests", async () => {
+  const calls: Call[] = [];
+  const sse = 'data: {"type":"permission.asked","properties":{"id":"per_1"}}\n\n';
+  const impl = (async (input: string | URL | Request, init?: RequestInit) => {
+    calls.push({
+      url: typeof input === "string" ? input : input.toString(),
+      method: init?.method ?? "GET",
+      body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
+    });
+    return new Response(sse, { status: 200 });
+  }) as FetchLike;
+  const runner = new OpencodeAgentRunner({ fetchImpl: impl, autoApprove: true });
+  await runner.streamEvents("http://x", "s1", new AbortController().signal);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const approval = calls.find((call) => call.method === "POST");
+  assert.equal(approval?.url, "http://x/session/s1/permissions/per_1");
+  assert.deepEqual(approval?.body, { response: "always" });
 });
 
 test("parse helpers validate their fields", () => {
