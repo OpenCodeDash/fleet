@@ -1,0 +1,53 @@
+# Example orchestrator configuration. Copy to orchestrator.yaml and edit.
+# Secrets use ${env:NAME} and are read from the environment (never stored here).
+
+board:
+  url: http://192.168.68.51:3000
+  id: esayzg
+  token: ${env:KANBAN_TOKEN}
+  queues:
+    author: [Todo, Changes Requested]
+    reviewer: [Code Review]
+  done: Done
+  blocked: [Need Help]
+
+hosts:
+  - name: agents.bigbox
+    ssh:
+      host: 192.168.68.106
+      user: root
+      key: ${env:FLEET_SSH_KEY}
+    maxContainers: 10
+    egress:
+      adminUrl: http://192.168.68.106:3129
+      base: [192.168.68.51]
+
+# Repos keyed by board tag (repo:<name>), plus `default`.
+repos:
+  default:
+    url: https://github.com/eyezahhhh/fleet-test.git
+    dir: /root/fleet-demo
+
+container:
+  modulePath: /etc/nixos/image/fleet-agent.nix
+  dns: [1.1.1.1, 8.8.8.8]
+  port: 4096
+
+model:
+  provider: router
+  id: basic
+
+agents:
+  default: build
+
+limits:
+  maxContainers: 10
+  providerConcurrency: 4
+  mcpConcurrency: 5
+
+review:
+  maxRounds: 3
+
+observability:
+  eventsPath: /var/log/fleet/events.jsonl
+  statusPort: 4000

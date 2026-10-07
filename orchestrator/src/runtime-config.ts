@@ -1,0 +1,225 @@
+import { readFileSync } from "node:fs";
+import { parse as parseYaml } from "yaml";
+
+export class RuntimeConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RuntimeConfigError";
+  }
+}
+
+export interface SshConfig {
+  host: string;
+  user?: string;
+  key?: string;
+}
+
+export interface HostConfig {
+  name: string;
+  ssh: SshConfig;
+  maxContainers: number;
+  egress?: { adminUrl: string; base: string[] };
+}
+
+export interface RepoConfig {
+  url: string;
+  dir: string;
+}
+
+export interface RuntimeConfig {
+  board: {
+    url: string;
+    id: string;
+    token?: string;
+    queues: { author: string[]; reviewer: string[] };
+    done: string;
+    blocked: string[];
+  };
+  hosts: HostConfig[];
+  /** Repos keyed by board tag (`repo:<name>`), plus `default`. */
+  repos: Record<string, RepoConfig>;
+  container: { modulePath: string; dns: string[]; port: number };
+  model: { provider: string; id: string };
+  agents: { default: string };
+  limits: { maxContainers: number; providerConcurrency: number; mcpConcurrency: number };
+  review: { maxRounds: number };
+  observability: { eventsPath: string; statusPort: number };
+}
+
+export interface LoadRuntimeConfigOptions {
+  filePath: string;
+  env?: Record<string, string | undefined>;
+}
+
+type Raw = Record<string, unknown>;
+
+function isObject(value: unknown): value is Raw {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function fail(path: string, message: string): never {
+  throw new RuntimeConfigError(`${path}: ${message}`);
+}
+
+function section(raw: Raw, key: string): Raw {
+  const value = raw[key];
+  if (value === undefined) return {};
+  if (!isObject(value)) fail(key, "expected a mapping");
+  return value;
+}
+
+function requiredString(record: Raw, key: string, path: string): string {
+  const value = record[key];
+  if (typeof value !== "string" || value.length === 0) fail(`${path}.${key}`, "expected a non-empty string");
+  return value;
+}
+
+function optionalString(record: Raw, key: string): string | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") fail(key, "expected a string");
+  return value;
+}
+
+function integer(record: Raw, key: string, path: string, fallback: number, min = 1): number {
+  const value = record[key];
+  if (value === undefined) return fallback;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < min) {
+    fail(`${path}.${key}`, `expected an integer >= ${min}`);
+  }
+  return value;
+}
+
+function stringList(record: Raw, key: string, path: string, fallback: string[]): string[] {
+  const value = record[key];
+  if (value === undefined) return fallback;
+  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
+    fail(`${path}.${key}`, "expected a list of strings");
+  }
+  return value as string[];
+}
+
+/** Replace `${env:NAME}` in every string value; fail if the variable is unset. */
+function substituteEnv(value: unknown, env: Record<string, string | undefined>): unknown {
+  if (typeof value === "string") {
+    return value.replace(/\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}/g, (_match, name: string) => {
+      const resolved = env[name];
+      if (resolved === undefined) {
+        throw new RuntimeConfigError(`environment variable ${name} is not set`);
+      }
+      return resolved;
+    });
+  }
+  if (Array.isArray(value)) return value.map((entry) => substituteEnv(entry, env));
+  if (isObject(value)) {
+    const out: Raw = {};
+    for (const [key, entry] of Object.entries(value)) out[key] = substituteEnv(entry, env);
+    return out;
+  }
+  return value;
+}
+
+function parseHosts(raw: Raw): HostConfig[] {
+  const value = raw.hosts;
+  if (value === undefined) fail("hosts", "at least one host is required");
+  if (!Array.isArray(value) || value.length === 0) fail("hosts", "expected a non-empty list");
+  return value.map((entry, index) => {
+    if (!isObject(entry)) fail(`hosts[${index}]`, "expected a mapping");
+    const sshRaw = section(entry, "ssh");
+    const egressRaw = entry.egress;
+    const host: HostConfig = {
+      name: requiredString(entry, "name", `hosts[${index}]`),
+      ssh: { host: requiredString(sshRaw, "host", `hosts[${index}].ssh`) },
+      maxContainers: integer(entry, "maxContainers", `hosts[${index}]`, 10),
+    };
+    const user = optionalString(sshRaw, "user");
+    if (user !== undefined) host.ssh.user = user;
+    const key = optionalString(sshRaw, "key");
+    if (key !== undefined) host.ssh.key = key;
+    if (egressRaw !== undefined) {
+      if (!isObject(egressRaw)) fail(`hosts[${index}].egress`, "expected a mapping");
+      host.egress = {
+        adminUrl: requiredString(egressRaw, "adminUrl", `hosts[${index}].egress`),
+        base: stringList(egressRaw, "base", `hosts[${index}].egress`, []),
+      };
+    }
+    return host;
+  });
+}
+
+function parseRepos(raw: Raw): Record<string, RepoConfig> {
+  const value = raw.repos;
+  if (!isObject(value) || Object.keys(value).length === 0) fail("repos", "at least one repo is required");
+  const repos: Record<string, RepoConfig> = {};
+  for (const [tag, entry] of Object.entries(value)) {
+    if (!isObject(entry)) fail(`repos.${tag}`, "expected a mapping");
+    repos[tag] = {
+      url: requiredString(entry, "url", `repos.${tag}`),
+      dir: requiredString(entry, "dir", `repos.${tag}`),
+    };
+  }
+  return repos;
+}
+
+function validate(raw: Raw): RuntimeConfig {
+  const board = section(raw, "board");
+  const queues = section(board, "queues");
+  const container = section(raw, "container");
+  const model = section(raw, "model");
+  const agents = section(raw, "agents");
+  const limits = section(raw, "limits");
+  const review = section(raw, "review");
+  const observability = section(raw, "observability");
+
+  const token = optionalString(board, "token");
+  return {
+    board: {
+      url: requiredString(board, "url", "board"),
+      id: requiredString(board, "id", "board"),
+      ...(token === undefined ? {} : { token }),
+      queues: {
+        author: stringList(queues, "author", "board.queues", ["Todo", "Changes Requested"]),
+        reviewer: stringList(queues, "reviewer", "board.queues", ["Code Review"]),
+      },
+      done: optionalString(board, "done") ?? "Done",
+      blocked: stringList(board, "blocked", "board", ["Need Help"]),
+    },
+    hosts: parseHosts(raw),
+    repos: parseRepos(raw),
+    container: {
+      modulePath: requiredString(container, "modulePath", "container"),
+      dns: stringList(container, "dns", "container", ["1.1.1.1", "8.8.8.8"]),
+      port: integer(container, "port", "container", 4096),
+    },
+    model: {
+      provider: requiredString(model, "provider", "model"),
+      id: requiredString(model, "id", "model"),
+    },
+    agents: { default: optionalString(agents, "default") ?? "build" },
+    limits: {
+      maxContainers: integer(limits, "maxContainers", "limits", 10),
+      providerConcurrency: integer(limits, "providerConcurrency", "limits", 4),
+      mcpConcurrency: integer(limits, "mcpConcurrency", "limits", 5),
+    },
+    review: { maxRounds: integer(review, "maxRounds", "review", 3) },
+    observability: {
+      eventsPath: optionalString(observability, "eventsPath") ?? "fleet-events.jsonl",
+      statusPort: integer(observability, "statusPort", "observability", 4000),
+    },
+  };
+}
+
+/** Load and validate `orchestrator.yaml`, substituting `${env:NAME}` references. */
+export function loadRuntimeConfig(options: LoadRuntimeConfigOptions): RuntimeConfig {
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(readFileSync(options.filePath, "utf8"));
+  } catch (error) {
+    throw new RuntimeConfigError(
+      `failed to read ${options.filePath}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (!isObject(parsed)) throw new RuntimeConfigError(`${options.filePath} must contain a mapping`);
+  const substituted = substituteEnv(parsed, options.env ?? process.env);
+  return validate(substituted as Raw);
+}
