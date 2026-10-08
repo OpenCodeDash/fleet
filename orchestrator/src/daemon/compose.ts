@@ -169,6 +169,8 @@ export function createDaemon(
       remote: repo.url,
       ...(repo.dir.length === 0 ? {} : { repoDir: repo.dir }),
       runner: new NodeExecutor(),
+      // Private repos: verify with the same token the container pushes with.
+      ...(env.FLEET_GITHUB_TOKEN === undefined ? {} : { token: env.FLEET_GITHUB_TOKEN }),
     });
     const deps: LoopDeps = {
       compile: (request) => compile(request, catalog),

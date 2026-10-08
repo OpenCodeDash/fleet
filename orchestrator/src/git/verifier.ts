@@ -9,6 +9,8 @@ export interface GitVerifierOptions {
   repoDir?: string;
   /** Ref the reviewer merges into (default `refs/heads/main`). */
   mainRef?: string;
+  /** Token for a private `https://` remote; injected as `x-access-token:<token>@`. */
+  token?: string;
 }
 
 /**
@@ -22,22 +24,32 @@ export class CommandGitVerifier implements GitVerifier {
   private readonly runner: CommandRunner;
   private readonly repoDir: string | undefined;
   private readonly mainRef: string;
+  private readonly token: string | undefined;
 
   constructor(options: GitVerifierOptions) {
     this.remote = options.remote;
     this.runner = options.runner;
     this.repoDir = options.repoDir;
     this.mainRef = options.mainRef ?? "refs/heads/main";
+    this.token = options.token;
   }
 
   private withRepo(args: string[]): string[] {
     return this.repoDir === undefined ? args : ["-C", this.repoDir, ...args];
   }
 
+  /** The remote URL, with the token embedded for a private `https://` remote. */
+  private remoteUrl(): string {
+    if (this.token === undefined || this.token.length === 0 || !this.remote.startsWith("https://")) {
+      return this.remote;
+    }
+    return this.remote.replace(/^https:\/\//, `https://x-access-token:${this.token}@`);
+  }
+
   async remoteRefExists(branch: string, sha: string): Promise<boolean> {
     const result = await this.runner.run(
       "git",
-      this.withRepo(["ls-remote", this.remote, `refs/heads/${branch}`]),
+      this.withRepo(["ls-remote", this.remoteUrl(), `refs/heads/${branch}`]),
     );
     if (result.code !== 0) return false;
     // `ls-remote` prints "<sha>\t<ref>"; the ref must still point at the reviewed commit.
@@ -55,7 +67,7 @@ export class CommandGitVerifier implements GitVerifier {
       this.repoDir,
       "fetch",
       "--quiet",
-      this.remote,
+      this.remoteUrl(),
       this.mainRef,
     ]);
     const result = await this.runner.run("git", [
@@ -72,7 +84,7 @@ export class CommandGitVerifier implements GitVerifier {
   async branchDeleted(branch: string): Promise<boolean> {
     const result = await this.runner.run(
       "git",
-      this.withRepo(["ls-remote", "--heads", this.remote, `refs/heads/${branch}`]),
+      this.withRepo(["ls-remote", "--heads", this.remoteUrl(), `refs/heads/${branch}`]),
     );
     return result.code === 0 && result.stdout.trim().length === 0;
   }

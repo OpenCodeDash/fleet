@@ -35,6 +35,28 @@ test("remoteRefExists queries the remote URL directly when there is no clone", a
   assert.deepEqual(calls[0]?.args, ["ls-remote", "https://example.com/r.git", "refs/heads/feat/x"]);
 });
 
+test("injects the token into an https remote for a private repo", async () => {
+  const { runner, calls } = runnerReturning({ stdout: "abc123\trefs/heads/feat/x\n" });
+  const verifier = new CommandGitVerifier({
+    remote: "https://github.com/acme/app.git",
+    token: "ghp_secret",
+    runner,
+  });
+  assert.equal(await verifier.remoteRefExists("feat/x", "abc123"), true);
+  assert.deepEqual(calls[0]?.args, [
+    "ls-remote",
+    "https://x-access-token:ghp_secret@github.com/acme/app.git",
+    "refs/heads/feat/x",
+  ]);
+});
+
+test("does not inject a token into a non-https remote", async () => {
+  const { runner, calls } = runnerReturning({ stdout: "abc123\trefs/heads/feat/x\n" });
+  const verifier = new CommandGitVerifier({ remote: "origin", token: "ghp_secret", runner });
+  await verifier.remoteRefExists("feat/x", "abc123");
+  assert.deepEqual(calls[0]?.args, ["ls-remote", "origin", "refs/heads/feat/x"]);
+});
+
 test("remoteRefExists is false when the ref moved or ls-remote failed", async () => {
   const moved = runnerReturning({ stdout: "deadbeef\trefs/heads/feat/x\n" });
   assert.equal(
