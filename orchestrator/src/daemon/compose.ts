@@ -12,7 +12,12 @@ import { TaskLoop } from "../loop/index.ts";
 import type { AttemptOutcome, LoopDeps, TaskAttempt } from "../loop/types.ts";
 import { OpencodeAgentRunner } from "../agents/index.ts";
 import { EventSink, JsonlEventStore } from "../observability/index.ts";
-import { NodeExecutor, SshCommandRunner, makeSshTunnelFactory } from "../remote/index.ts";
+import {
+  NodeExecutor,
+  SshCommandRunner,
+  makeSshTunnelFactory,
+  type TunnelFactory,
+} from "../remote/index.ts";
 import { EgressRegistrar } from "../egress/index.ts";
 import { NixosContainerBackend } from "../provision/backend.ts";
 import { ContainerProvisioner } from "../provision/provisioner.ts";
@@ -117,19 +122,28 @@ export function createDaemon(
   const provisioners = new Map<string, ContainerProvisioner>();
   const runners = new Map<string, CommandRunner>();
   for (const host of config.hosts) {
-    const local = new NodeExecutor();
-    const sshExtra = host.ssh.key === undefined ? [] : ["-i", host.ssh.key, "-o", "IdentitiesOnly=yes"];
-    const runner = new SshCommandRunner({
-      host: host.ssh.host,
-      user: host.ssh.user,
-      extraArgs: sshExtra,
-      executor: local,
-    });
+    const executor = new NodeExecutor();
+    let runner: CommandRunner;
+    let tunnel: TunnelFactory | undefined;
+    if (host.local === true) {
+      // Co-located: drive nixos-container directly; containers are reachable without a tunnel.
+      runner = executor;
+    } else {
+      const ssh = host.ssh;
+      if (ssh === undefined) throw new Error(`host "${host.name}" needs ssh or local: true`);
+      const sshExtra = ssh.key === undefined ? [] : ["-i", ssh.key, "-o", "IdentitiesOnly=yes"];
+      runner = new SshCommandRunner({
+        host: ssh.host,
+        user: ssh.user,
+        extraArgs: sshExtra,
+        executor,
+      });
+      tunnel = makeSshTunnelFactory({
+        target: ssh.user === undefined ? ssh.host : `${ssh.user}@${ssh.host}`,
+        extraArgs: sshExtra,
+      });
+    }
     runners.set(host.name, runner);
-    const tunnel = makeSshTunnelFactory({
-      target: host.ssh.user === undefined ? host.ssh.host : `${host.ssh.user}@${host.ssh.host}`,
-      extraArgs: sshExtra,
-    });
     const registrar =
       host.egress === undefined
         ? undefined
@@ -138,7 +152,7 @@ export function createDaemon(
       host.name,
       new ContainerProvisioner(
         new NixosContainerBackend(runner, {
-          tunnel,
+          ...(tunnel === undefined ? {} : { tunnel }),
           dns: config.container.dns,
           ...(registrar === undefined ? {} : { registrar }),
         }),

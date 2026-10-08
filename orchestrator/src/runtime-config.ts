@@ -27,7 +27,10 @@ export interface HostEgressConfig {
 
 export interface HostConfig {
   name: string;
-  ssh: SshConfig;
+  /** Co-located host: run `nixos-container` locally (no SSH, no tunnel). */
+  local?: boolean;
+  /** Required unless `local` is true. */
+  ssh?: SshConfig;
   maxContainers: number;
   egress?: HostEgressConfig;
 }
@@ -138,28 +141,34 @@ function parseHosts(raw: Raw): HostConfig[] {
   if (!Array.isArray(value) || value.length === 0) fail("hosts", "expected a non-empty list");
   return value.map((entry, index) => {
     if (!isObject(entry)) fail(`hosts[${index}]`, "expected a mapping");
-    const sshRaw = section(entry, "ssh");
-    const egressRaw = entry.egress;
+    const path = `hosts[${index}]`;
     const host: HostConfig = {
-      name: requiredString(entry, "name", `hosts[${index}]`),
-      ssh: { host: requiredString(sshRaw, "host", `hosts[${index}].ssh`) },
-      maxContainers: integer(entry, "maxContainers", `hosts[${index}]`, 10),
+      name: requiredString(entry, "name", path),
+      maxContainers: integer(entry, "maxContainers", path, 10),
     };
-    const user = optionalString(sshRaw, "user");
-    if (user !== undefined) host.ssh.user = user;
-    const key = optionalString(sshRaw, "key");
-    if (key !== undefined) host.ssh.key = key;
+    if (entry.local === true) {
+      host.local = true;
+    } else {
+      const sshRaw = section(entry, "ssh");
+      const ssh: SshConfig = { host: requiredString(sshRaw, "host", `${path}.ssh`) };
+      const user = optionalString(sshRaw, "user");
+      if (user !== undefined) ssh.user = user;
+      const key = optionalString(sshRaw, "key");
+      if (key !== undefined) ssh.key = key;
+      host.ssh = ssh;
+    }
+    const egressRaw = entry.egress;
     if (egressRaw !== undefined) {
-      if (!isObject(egressRaw)) fail(`hosts[${index}].egress`, "expected a mapping");
-      const path = `hosts[${index}].egress`;
+      if (!isObject(egressRaw)) fail(`${path}.egress`, "expected a mapping");
+      const egressPath = `${path}.egress`;
       const noProxy = egressRaw.noProxy;
       host.egress = {
-        adminUrl: requiredString(egressRaw, "adminUrl", path),
-        proxyUrl: requiredString(egressRaw, "proxyUrl", path),
-        base: stringList(egressRaw, "base", path, []),
+        adminUrl: requiredString(egressRaw, "adminUrl", egressPath),
+        proxyUrl: requiredString(egressRaw, "proxyUrl", egressPath),
+        base: stringList(egressRaw, "base", egressPath, []),
         ...(noProxy === undefined
           ? {}
-          : { noProxy: stringList(egressRaw, "noProxy", path, []) }),
+          : { noProxy: stringList(egressRaw, "noProxy", egressPath, []) }),
       };
     }
     return host;

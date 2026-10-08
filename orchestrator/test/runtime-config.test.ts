@@ -106,6 +106,42 @@ catalog: /c.json
   );
 });
 
+test("accepts a co-located host (local: true) with no ssh", () => {
+  const file = write(`
+board: { url: http://board, id: b1 }
+hosts:
+  - name: local
+    local: true
+    egress: { adminUrl: http://127.0.0.1:3129, proxyUrl: http://192.168.68.106:3128 }
+repos:
+  default: { url: https://x/r.git, dir: /r }
+container: { modulePath: /m.nix }
+model: { provider: router, id: basic }
+catalog: /c.json
+`);
+  const config = loadRuntimeConfig({ filePath: file, env: {} });
+  assert.equal(config.hosts[0]?.local, true);
+  assert.equal(config.hosts[0]?.ssh, undefined);
+});
+
+test("fails when a non-local host has no ssh", () => {
+  const file = write(`
+board: { url: http://board, id: b1 }
+hosts:
+  - name: h1
+repos:
+  default: { url: https://x/r.git, dir: /r }
+container: { modulePath: /m.nix }
+model: { provider: router, id: basic }
+catalog: /c.json
+`);
+  assert.throws(
+    () => loadRuntimeConfig({ filePath: file, env: {} }),
+    (error: unknown) =>
+      error instanceof RuntimeConfigError && /hosts\[0\]\.ssh\.host/.test((error as Error).message),
+  );
+});
+
 test("substitutes environment references", () => {
   const config = loadRuntimeConfig({ filePath: write(withToken), env: { KANBAN_TOKEN: "bdsk_x" } });
   assert.equal(config.board.token, "bdsk_x");
