@@ -2,14 +2,13 @@ import { readFileSync } from "node:fs";
 import { compile, type Catalog } from "../capability/index.ts";
 import type { Role } from "../capability/types.ts";
 import { CredentialBroker, envCredentialProviders } from "../credentials/index.ts";
-import { BoardClient } from "../board/client.ts";
+import { BoardClient, findTask } from "../board/client.ts";
 import { createBoardPort } from "../board/port.ts";
-import { findTask } from "../board/client.ts";
 import type { Task } from "../board/types.ts";
 import { CommandGitVerifier } from "../git/index.ts";
 import { Scheduler } from "../limits/index.ts";
 import { TaskLoop } from "../loop/index.ts";
-import type { AttemptOutcome, LoopDeps, TaskAttempt } from "../loop/types.ts";
+import type { AttemptOutcome, BoardPort, LoopDeps, TaskAttempt } from "../loop/types.ts";
 import { OpencodeAgentRunner } from "../agents/index.ts";
 import { EventSink, JsonlEventStore } from "../observability/index.ts";
 import {
@@ -23,19 +22,23 @@ import { NixosContainerBackend } from "../provision/backend.ts";
 import { ContainerProvisioner } from "../provision/provisioner.ts";
 import type { CommandRunner } from "../provision/types.ts";
 import { Reconciler, type ReconcileReport } from "../recovery/index.ts";
-import type { HostConfig, RepoConfig, RuntimeConfig } from "../runtime-config.ts";
+import type { BoardConfig, HostConfig, RepoConfig, RuntimeConfig } from "../runtime-config.ts";
 import { FleetDaemon } from "./daemon.ts";
 import { SqliteStateStore } from "./state.ts";
 import type { Candidate, DaemonDeps } from "./types.ts";
 
+const MAX_NAME_LENGTH = 11;
+
 export interface DaemonHandle {
   daemon: FleetDaemon;
   state: SqliteStateStore;
-  board: BoardClient;
-  /** Run a single attempt for a task id (the `once` debug command). */
-  runOnce(taskId: number, role: Role): Promise<void>;
-  /** Reconcile the board against running containers (startup + the `reconcile` command). */
+  boards: BoardClient[];
+  /** Run a single attempt for a task id (the `once` debug command); searches all boards unless a board id is given. */
+  runOnce(taskId: number, role: Role, boardId?: string): Promise<void>;
+  /** Reconcile the boards against running containers (startup + the `reconcile` command). */
   reconcile(): Promise<ReconcileReport>;
+  /** Subscribe to board events (the stream is global; one client is enough). */
+  subscribeEvents(onEvent: (event: unknown) => void, signal: AbortSignal): void;
   close(): void;
 }
 
@@ -65,6 +68,18 @@ export function promptForTask(task: Task, role: Role, repoUrl: string): string {
     : `Task: ${spec}\n\nRepository: ${repoUrl}\n\nReview the change on branch ${branch}: clone the repository, check out ${branch}, verify it satisfies the task, and run any tests. If it passes, merge ${branch} into main, push main, and delete the remote branch ${branch}.`;
 }
 
+/**
+ * Container name for one attempt. Must be unique per host and ≤ 11 chars (nixos-container /
+ * veth limit), and task ids are only unique per board, so the board id is included. The task
+ * id is base36-encoded to leave room for the board id.
+ */
+export function containerName(boardId: string, taskId: number, role: Role): string {
+  const suffix = `${taskId.toString(36)}${role === "reviewer" ? "r" : "a"}`;
+  const board = boardId.toLowerCase().replace(/[^a-z0-9]/g, "") || "x";
+  const room = Math.max(1, MAX_NAME_LENGTH - 1 - suffix.length);
+  return `c${board.slice(0, room)}${suffix}`;
+}
+
 function providerNames(catalog: Catalog): string[] {
   const names = new Set<string>();
   for (const entry of Object.values(catalog.servers)) {
@@ -83,10 +98,6 @@ function injectEnvFromEnv(env: Record<string, string | undefined>): Record<strin
   return out;
 }
 
-function containerName(taskId: number, role: Role): string {
-  return `c${taskId}${role === "reviewer" ? "r" : "a"}`.slice(0, 11);
-}
-
 /** Build the daemon and its collaborators from `RuntimeConfig`. */
 export function createDaemon(
   config: RuntimeConfig,
@@ -94,13 +105,30 @@ export function createDaemon(
   log: (message: string) => void = (message) => process.stdout.write(`[daemon] ${message}\n`),
 ): DaemonHandle {
   const catalog = JSON.parse(readFileSync(config.catalog, "utf8")) as Catalog;
-  const board = new BoardClient({
-    url: config.board.url,
-    ...(config.board.token === undefined
-      ? {}
-      : { headers: { authorization: `Bearer ${config.board.token}` } }),
-  });
-  const boardPort = createBoardPort(board, config.board.id);
+
+  const boardClients = new Map<string, BoardClient>();
+  const boardPorts = new Map<string, BoardPort>();
+  for (const board of config.boards) {
+    const client = new BoardClient({
+      url: board.url,
+      ...(board.token === undefined
+        ? {}
+        : { headers: { authorization: `Bearer ${board.token}` } }),
+    });
+    boardClients.set(board.id, client);
+    boardPorts.set(board.id, createBoardPort(client, board.id));
+  }
+  const clientFor = (board: BoardConfig): BoardClient => {
+    const client = boardClients.get(board.id);
+    if (client === undefined) throw new Error(`no client for board "${board.id}"`);
+    return client;
+  };
+  const portFor = (board: BoardConfig): BoardPort => {
+    const port = boardPorts.get(board.id);
+    if (port === undefined) throw new Error(`no port for board "${board.id}"`);
+    return port;
+  };
+
   const state = new SqliteStateStore(env.FLEET_STATE_PATH ?? "fleet-state.sqlite");
   const scheduler = new Scheduler({
     maxContainers: config.limits.maxContainers,
@@ -183,7 +211,7 @@ export function createDaemon(
       destroy: (handle) => provisioner.destroy(handle),
       runAgent: (input) => agentRunner.run(input),
       git,
-      board: boardPort,
+      board: portFor(candidate.board),
       sinkFor: (correlation, secrets) =>
         new EventSink({ store: new JsonlEventStore(config.observability.eventsPath), correlation, secrets }),
       modulePath: config.container.modulePath,
@@ -205,7 +233,7 @@ export function createDaemon(
       repo: repo.url,
       role,
       prompt: promptForTask(candidate.task, role, repo.url),
-      containerId: containerName(candidate.task.id, role),
+      containerId: containerName(candidate.board.id, candidate.task.id, role),
       ...(role === "reviewer" ? { branch: branchForTask(candidate.task) } : {}),
     };
     return new TaskLoop(deps).run(attempt);
@@ -213,20 +241,27 @@ export function createDaemon(
 
   const deps: DaemonDeps = {
     config,
-    snapshot: () => board.getBoard(config.board.id),    claim: async (candidate) => {
-      await board.claim(config.board.id, candidate.column.id, candidate.task.id, "fleet-daemon");
+    snapshot: (board) => clientFor(board).getBoard(board.id),
+    claim: async (candidate) => {
+      await clientFor(candidate.board).claim(
+        candidate.board.id,
+        candidate.column.id,
+        candidate.task.id,
+        "fleet-daemon",
+      );
     },
     release: async (candidate) => {
       // The attempt may have moved the task to another column (e.g. Code Review), so release
       // it where it currently sits, not where it was claimed.
-      const snapshot = await board.getBoard(config.board.id);
+      const client = clientFor(candidate.board);
+      const snapshot = await client.getBoard(candidate.board.id);
       const found = findTask(snapshot, candidate.task.id);
       if (found !== undefined) {
-        await board.release(config.board.id, found.column.id, candidate.task.id);
+        await client.release(candidate.board.id, found.column.id, candidate.task.id);
       }
     },
-    moveTo: (taskId, columnName) => boardPort.moveTo(String(taskId), columnName),
-    note: (taskId, note) => boardPort.appendNote(String(taskId), note),
+    moveTo: (board, taskId, columnName) => portFor(board).moveTo(String(taskId), columnName),
+    note: (board, taskId, note) => portFor(board).appendNote(String(taskId), note),
     admit: (input) => scheduler.admit(input),
     runAttempt,
     state,
@@ -234,13 +269,21 @@ export function createDaemon(
   };
 
   const daemon = new FleetDaemon(deps);
-  const runOnce = async (taskId: number, role: Role): Promise<void> => {
-    const snapshot = await board.getBoard(config.board.id);
-    const found = findTask(snapshot, taskId);
-    if (found === undefined) throw new Error(`task ${taskId} not found on board`);
+
+  const runOnce = async (taskId: number, role: Role, boardId?: string): Promise<void> => {
+    const targets = boardId === undefined ? config.boards : config.boards.filter((b) => b.id === boardId);
+    if (targets.length === 0) throw new Error(`unknown board "${boardId}"`);
     const host = config.hosts[0];
     if (host === undefined) throw new Error("no hosts configured");
-    await daemon.runCandidate({ task: found.task, column: found.column, role }, host);
+    for (const board of targets) {
+      const snapshot = await clientFor(board).getBoard(board.id);
+      const found = findTask(snapshot, taskId);
+      if (found !== undefined) {
+        await daemon.runCandidate({ task: found.task, column: found.column, role, board }, host);
+        return;
+      }
+    }
+    throw new Error(`task ${taskId} not found on any configured board`);
   };
 
   const reconcile = async (): Promise<ReconcileReport> => {
@@ -248,6 +291,7 @@ export function createDaemon(
     const reconciler = new Reconciler({
       inProgressTasks: async () =>
         state.running().map((record) => ({
+          boardId: record.boardId,
           taskId: String(record.taskId),
           containerId: record.containerId,
           capabilityHash: record.capabilityHash,
@@ -273,13 +317,30 @@ export function createDaemon(
         }
       },
       revokeCredentials: (containerId) => broker.revoke(containerId),
-      requeue: async (taskId) => {
-        await boardPort.moveTo(taskId, config.board.queues.author[0] ?? "Todo");
-        state.stopRunning(Number(taskId));
+      requeue: async (boardId, taskId) => {
+        const board = config.boards.find((entry) => entry.id === boardId);
+        if (board !== undefined) {
+          await portFor(board).moveTo(taskId, board.queues.author[0] ?? "Todo");
+        }
+        state.stopRunning(boardId, Number(taskId));
       },
     });
     return reconciler.reconcile();
   };
 
-  return { daemon, state, board, runOnce, reconcile, close: () => state.close() };
+  const subscribeEvents = (onEvent: (event: unknown) => void, signal: AbortSignal): void => {
+    // The server's /events stream is global, so one client covers every board.
+    const first = config.boards[0];
+    if (first !== undefined) void clientFor(first).subscribeEvents(onEvent, signal);
+  };
+
+  return {
+    daemon,
+    state,
+    boards: [...boardClients.values()],
+    runOnce,
+    reconcile,
+    subscribeEvents,
+    close: () => state.close(),
+  };
 }

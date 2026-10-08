@@ -40,15 +40,18 @@ export interface RepoConfig {
   dir: string;
 }
 
+export interface BoardConfig {
+  url: string;
+  id: string;
+  token?: string;
+  queues: { author: string[]; reviewer: string[] };
+  done: string;
+  blocked: string[];
+}
+
 export interface RuntimeConfig {
-  board: {
-    url: string;
-    id: string;
-    token?: string;
-    queues: { author: string[]; reviewer: string[] };
-    done: string;
-    blocked: string[];
-  };
+  /** Boards the daemon works; each defines its own queues/columns. */
+  boards: BoardConfig[];
   /** Path to the MCP capability catalog (see docs/capability-compiler.md). */
   catalog: string;
   hosts: HostConfig[];
@@ -189,9 +192,40 @@ function parseRepos(raw: Raw): Record<string, RepoConfig> {
   return repos;
 }
 
+function parseBoard(raw: Raw, path: string): BoardConfig {
+  const queues = section(raw, "queues");
+  const token = optionalString(raw, "token");
+  return {
+    url: requiredString(raw, "url", path),
+    id: requiredString(raw, "id", path),
+    ...(token === undefined ? {} : { token }),
+    queues: {
+      author: stringList(queues, "author", `${path}.queues`, ["Todo", "Changes Requested"]),
+      reviewer: stringList(queues, "reviewer", `${path}.queues`, ["Code Review"]),
+    },
+    done: optionalString(raw, "done") ?? "Done",
+    blocked: stringList(raw, "blocked", path, ["Need Help"]),
+  };
+}
+
+/** `boards: [...]`, or a single `board: {...}` wrapped as a one-element list. */
+function parseBoards(raw: Raw): BoardConfig[] {
+  if (raw.boards !== undefined) {
+    const value = raw.boards;
+    if (!Array.isArray(value) || value.length === 0) fail("boards", "expected a non-empty list");
+    return value.map((entry, index) => {
+      if (!isObject(entry)) fail(`boards[${index}]`, "expected a mapping");
+      return parseBoard(entry, `boards[${index}]`);
+    });
+  }
+  if (raw.board !== undefined) {
+    if (!isObject(raw.board)) fail("board", "expected a mapping");
+    return [parseBoard(raw.board, "board")];
+  }
+  return fail("boards", "at least one board is required");
+}
+
 function validate(raw: Raw): RuntimeConfig {
-  const board = section(raw, "board");
-  const queues = section(board, "queues");
   const container = section(raw, "container");
   const model = section(raw, "model");
   const agents = section(raw, "agents");
@@ -199,19 +233,8 @@ function validate(raw: Raw): RuntimeConfig {
   const review = section(raw, "review");
   const observability = section(raw, "observability");
 
-  const token = optionalString(board, "token");
   return {
-    board: {
-      url: requiredString(board, "url", "board"),
-      id: requiredString(board, "id", "board"),
-      ...(token === undefined ? {} : { token }),
-      queues: {
-        author: stringList(queues, "author", "board.queues", ["Todo", "Changes Requested"]),
-        reviewer: stringList(queues, "reviewer", "board.queues", ["Code Review"]),
-      },
-      done: optionalString(board, "done") ?? "Done",
-      blocked: stringList(board, "blocked", "board", ["Need Help"]),
-    },
+    boards: parseBoards(raw),
     catalog: requiredString(raw, "catalog", "config"),
     hosts: parseHosts(raw),
     repos: parseRepos(raw),

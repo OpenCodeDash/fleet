@@ -4,10 +4,10 @@ import type { Role } from "./capability/types.ts";
 
 const USAGE = `fleet orchestrator
 usage:
-  run                      run the daemon (polls the board)
-  once <taskId> <role>     run one attempt (author|reviewer)
+  run                      run the daemon (polls the boards)
+  once <taskId> <role> [boardId]   run one attempt (author|reviewer)
   status                   print in-flight attempts
-  reconcile                reconcile the board against running containers
+  reconcile                reconcile the boards against running containers
 env:
   FLEET_CONFIG             path to orchestrator.yaml (default ./orchestrator.yaml)
   FLEET_STATE_PATH         path to the state db (default ./fleet-state.sqlite)
@@ -36,13 +36,14 @@ export async function run(
   if (command === "once") {
     const taskId = Number(rest[0]);
     const role = (rest[1] ?? "author") as Role;
+    const boardId = rest[2];
     if (!Number.isInteger(taskId)) {
-      console.error("usage: once <taskId> <author|reviewer>");
+      console.error("usage: once <taskId> <author|reviewer> [boardId]");
       handle.close();
       return 2;
     }
     try {
-      await handle.runOnce(taskId, role);
+      await handle.runOnce(taskId, role, boardId);
       return 0;
     } finally {
       handle.close();
@@ -114,7 +115,7 @@ export async function run(
     // Event-driven: react to board changes immediately; poll as a fallback.
     const controller = new AbortController();
     let scheduled: ReturnType<typeof setTimeout> | null = null;
-    void handle.board.subscribeEvents(() => {
+    handle.subscribeEvents(() => {
       if (scheduled !== null) return;
       scheduled = setTimeout(() => {
         scheduled = null;

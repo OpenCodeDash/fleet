@@ -5,7 +5,7 @@ import type { RuntimeConfig } from "../src/runtime-config.ts";
 
 function config(): RuntimeConfig {
   return {
-    board: { url: "b", id: "b1", queues: { author: [], reviewer: [] }, done: "Done", blocked: [] },
+    boards: [{ url: "b", id: "b1", queues: { author: [], reviewer: [] }, done: "Done", blocked: [] }],
     catalog: "c",
     hosts: [],
     repos: { default: { url: "u", dir: "d" } },

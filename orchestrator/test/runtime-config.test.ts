@@ -45,17 +45,47 @@ catalog: /c.json
 
 test("loads a minimal config with defaults", () => {
   const config = loadRuntimeConfig({ filePath: write(minimal), env: {} });
-  assert.equal(config.board.url, "http://board");
-  assert.deepEqual(config.board.queues.author, ["Todo", "Changes Requested"]);
-  assert.deepEqual(config.board.queues.reviewer, ["Code Review"]);
-  assert.equal(config.board.done, "Done");
-  assert.deepEqual(config.board.blocked, ["Need Help"]);
+  assert.equal(config.boards.length, 1);
+  assert.equal(config.boards[0]?.url, "http://board");
+  assert.deepEqual(config.boards[0]?.queues.author, ["Todo", "Changes Requested"]);
+  assert.deepEqual(config.boards[0]?.queues.reviewer, ["Code Review"]);
+  assert.equal(config.boards[0]?.done, "Done");
+  assert.deepEqual(config.boards[0]?.blocked, ["Need Help"]);
   assert.equal(config.hosts.length, 1);
   assert.equal(config.hosts[0]?.maxContainers, 10);
   assert.deepEqual(config.container.dns, ["1.1.1.1", "8.8.8.8"]);
   assert.equal(config.container.port, 4096);
   assert.equal(config.review.maxRounds, 3);
   assert.equal(config.observability.statusPort, 4000);
+});
+
+test("parses multiple boards, each with its own queues", () => {
+  const file = write(`
+boards:
+  - url: http://a
+    id: b1
+    queues: { author: [Todo], reviewer: [Review] }
+    done: Shipped
+    blocked: [Stuck]
+  - url: http://b
+    id: b2
+hosts:
+  - name: h1
+    ssh: { host: 10.0.0.1 }
+repos:
+  default: { url: https://x/r.git, dir: /r }
+container: { modulePath: /m.nix }
+model: { provider: router, id: basic }
+catalog: /c.json
+`);
+  const config = loadRuntimeConfig({ filePath: file, env: {} });
+  assert.equal(config.boards.length, 2);
+  assert.deepEqual(config.boards[0]?.queues.author, ["Todo"]);
+  assert.deepEqual(config.boards[0]?.queues.reviewer, ["Review"]);
+  assert.equal(config.boards[0]?.done, "Shipped");
+  assert.deepEqual(config.boards[0]?.blocked, ["Stuck"]);
+  assert.equal(config.boards[1]?.id, "b2");
+  assert.deepEqual(config.boards[1]?.queues.author, ["Todo", "Changes Requested"]);
 });
 
 test("parses multiple hosts with egress", () => {
@@ -144,7 +174,7 @@ catalog: /c.json
 
 test("substitutes environment references", () => {
   const config = loadRuntimeConfig({ filePath: write(withToken), env: { KANBAN_TOKEN: "bdsk_x" } });
-  assert.equal(config.board.token, "bdsk_x");
+  assert.equal(config.boards[0]?.token, "bdsk_x");
 });
 
 test("fails when a referenced env var is unset", () => {
@@ -160,7 +190,7 @@ test("fails on a missing required field", () => {
   );
   assert.throws(
     () => loadRuntimeConfig({ filePath: file, env: {} }),
-    (error: unknown) => error instanceof RuntimeConfigError && /board\.url/.test((error as Error).message),
+    (error: unknown) => error instanceof RuntimeConfigError && /boards/.test((error as Error).message),
   );
 });
 

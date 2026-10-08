@@ -34,13 +34,14 @@ export class Reconciler {
     const kept: string[] = [];
 
     for (const task of tasks) {
+      const label = `${task.boardId}#${task.taskId}`;
       const container = this.findContainer(task, containers);
       if (container === null) {
-        await this.deps.requeue(task.taskId);
-        requeued.push(task.taskId);
+        await this.deps.requeue(task.boardId, task.taskId);
+        requeued.push(label);
       } else {
         owned.add(container.containerId);
-        kept.push(task.taskId);
+        kept.push(label);
       }
     }
 

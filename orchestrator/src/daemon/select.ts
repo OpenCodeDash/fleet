@@ -1,6 +1,6 @@
 import type { Board } from "../board/types.ts";
-import type { RuntimeConfig } from "../runtime-config.ts";
-import type { Candidate } from "./types.ts";
+import type { BoardConfig } from "../runtime-config.ts";
+import { taskKey, type Candidate } from "./types.ts";
 
 const PRIORITY_ORDER: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
 
@@ -17,26 +17,26 @@ function compare(a: Candidate, b: Candidate): number {
 }
 
 /**
- * Eligible work: tasks in an author or reviewer queue that are unclaimed, not already
- * running, and whose prerequisites are Done — ordered by priority then board position.
+ * Eligible work on one board: tasks in an author or reviewer queue that are unclaimed, not
+ * already running, and whose prerequisites are Done — ordered by priority then board position.
  */
 export function selectCandidates(
-  board: Board,
-  config: RuntimeConfig,
-  running: Set<number>,
+  snapshot: Board,
+  board: BoardConfig,
+  running: Set<string>,
 ): Candidate[] {
   const doneIds = new Set<number>();
-  for (const column of board.columns) {
-    if (column.name === config.board.done) {
+  for (const column of snapshot.columns) {
+    if (column.name === board.done) {
       for (const task of column.tasks) doneIds.add(task.id);
     }
   }
-  const authorQueues = new Set(config.board.queues.author);
-  const reviewerQueues = new Set(config.board.queues.reviewer);
-  const blocked = new Set(config.board.blocked);
+  const authorQueues = new Set(board.queues.author);
+  const reviewerQueues = new Set(board.queues.reviewer);
+  const blocked = new Set(board.blocked);
 
   const candidates: Candidate[] = [];
-  for (const column of board.columns) {
+  for (const column of snapshot.columns) {
     if (blocked.has(column.name)) continue;
     const role = authorQueues.has(column.name)
       ? "author"
@@ -46,9 +46,9 @@ export function selectCandidates(
     if (role === undefined) continue;
     for (const task of column.tasks) {
       if (task.claimedBy !== null) continue;
-      if (running.has(task.id)) continue;
+      if (running.has(taskKey(board.id, task.id))) continue;
       if (!depsSatisfied(task, doneIds)) continue;
-      candidates.push({ task, column, role });
+      candidates.push({ task, column, role, board });
     }
   }
   return candidates.sort(compare);

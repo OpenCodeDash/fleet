@@ -32,8 +32,8 @@ function harness(
     async revokeCredentials(id) {
       revoked.push(id);
     },
-    async requeue(id) {
-      requeued.push(id);
+    async requeue(boardId, taskId) {
+      requeued.push(`${boardId}#${taskId}`);
     },
   };
   return { deps, destroyed, revoked, requeued };
@@ -41,11 +41,11 @@ function harness(
 
 test("keeps a task whose assigned container is running", async () => {
   const h = harness(
-    [{ taskId: "#1", containerId: "c1", capabilityHash: "h1" }],
+    [{ boardId: "b1", taskId: "1", containerId: "c1", capabilityHash: "h1" }],
     [{ containerId: "c1", capabilityHash: "h1" }],
   );
   const report = await new Reconciler(h.deps).reconcile();
-  assert.deepEqual(report, { destroyed: [], revoked: [], requeued: [], kept: ["#1"] });
+  assert.deepEqual(report, { destroyed: [], revoked: [], requeued: [], kept: ["b1#1"] });
 });
 
 test("destroys and revokes an orphan container with no owning task", async () => {
@@ -57,19 +57,19 @@ test("destroys and revokes an orphan container with no owning task", async () =>
 });
 
 test("requeues an in-progress task with no live container", async () => {
-  const h = harness([{ taskId: "#3", containerId: "c3", capabilityHash: "h3" }], []);
+  const h = harness([{ boardId: "b1", taskId: "3", containerId: "c3", capabilityHash: "h3" }], []);
   const report = await new Reconciler(h.deps).reconcile();
-  assert.deepEqual(report.requeued, ["#3"]);
+  assert.deepEqual(report.requeued, ["b1#3"]);
   assert.deepEqual(report.destroyed, []);
 });
 
 test("matches by capability hash when the task has no container id", async () => {
   const h = harness(
-    [{ taskId: "#4", containerId: null, capabilityHash: "h4" }],
+    [{ boardId: "b1", taskId: "4", containerId: null, capabilityHash: "h4" }],
     [{ containerId: "cX", capabilityHash: "h4" }],
   );
   const report = await new Reconciler(h.deps).reconcile();
-  assert.deepEqual(report.kept, ["#4"]);
+  assert.deepEqual(report.kept, ["b1#4"]);
   assert.deepEqual(report.destroyed, []);
   assert.deepEqual(report.requeued, []);
 });
@@ -77,8 +77,8 @@ test("matches by capability hash when the task has no container id", async () =>
 test("a consistent state is a no-op", async () => {
   const h = harness(
     [
-      { taskId: "#1", containerId: "c1", capabilityHash: "h1" },
-      { taskId: "#2", containerId: "c2", capabilityHash: "h2" },
+      { boardId: "b1", taskId: "1", containerId: "c1", capabilityHash: "h1" },
+      { boardId: "b1", taskId: "2", containerId: "c2", capabilityHash: "h2" },
     ],
     [
       { containerId: "c1", capabilityHash: "h1" },
@@ -86,5 +86,5 @@ test("a consistent state is a no-op", async () => {
     ],
   );
   const report = await new Reconciler(h.deps).reconcile();
-  assert.deepEqual(report, { destroyed: [], revoked: [], requeued: [], kept: ["#1", "#2"] });
+  assert.deepEqual(report, { destroyed: [], revoked: [], requeued: [], kept: ["b1#1", "b1#2"] });
 });

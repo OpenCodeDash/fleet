@@ -1,4 +1,5 @@
 export interface RecoveryTask {
+  boardId: string;
   taskId: string;
   /** Container the task was assigned to, if any. */
   containerId: string | null;
@@ -16,7 +17,7 @@ export interface RecoveryDeps {
   runningContainers(): Promise<RunningContainer[]>;
   destroyContainer(containerId: string): Promise<void>;
   revokeCredentials(containerId: string): Promise<void>;
-  requeue(taskId: string): Promise<void>;
+  requeue(boardId: string, taskId: string): Promise<void>;
 }
 
 export interface ReconcileReport {

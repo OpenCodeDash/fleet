@@ -22,6 +22,30 @@ built-in defaults  <  orchestrator.yaml  <  ${env:NAME} substitution
 
 A value that would loosen a floor is rejected at startup, not silently clamps.
 
+## Boards
+
+The daemon works one or more boards:
+
+```yaml
+boards:
+  - url: http://192.168.68.51:3000
+    id: gczhzo
+    token: ${env:KANBAN_TOKEN}
+    queues:
+      author: [Todo, Changes Requested]   # columns claimed as author
+      reviewer: [Code Review]             # columns claimed as reviewer
+    done: Done
+    blocked: [Need Help]
+  - url: http://192.168.68.51:3000
+    id: whyrwn
+    token: ${env:KANBAN_TOKEN}
+```
+
+Each board defines its own queues/`done`/`blocked` columns. A single `board: {...}` is
+accepted as sugar for a one-element `boards:`. Task ids are only unique **per board**, so the
+daemon keys its state and names containers by `boardId:taskId` — a container for board `x`
+task `5` is distinct from board `y` task `5` on the same host.
+
 ## Tunables
 
 | Key | Default | Meaning | Detail |

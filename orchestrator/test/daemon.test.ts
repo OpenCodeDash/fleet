@@ -4,6 +4,7 @@ import type { Board, Column, Task } from "../src/board/index.ts";
 import {
   FleetDaemon,
   branchForTask,
+  containerName,
   promptForTask,
   repoForTask,
   selectCandidates,
@@ -12,21 +13,23 @@ import {
   type TaskStateStore,
 } from "../src/daemon/index.ts";
 import type { AttemptOutcome } from "../src/loop/index.ts";
-import type { HostConfig, RuntimeConfig } from "../src/runtime-config.ts";
+import type { BoardConfig, HostConfig, RuntimeConfig } from "../src/runtime-config.ts";
 
 function host(name: string): HostConfig {
   return { name, ssh: { host: name }, maxContainers: 10 };
 }
 
+const boardConfig: BoardConfig = {
+  url: "http://b",
+  id: "b1",
+  queues: { author: ["Todo", "Changes Requested"], reviewer: ["Code Review"] },
+  done: "Done",
+  blocked: ["Need Help"],
+};
+
 function makeConfig(overrides: Partial<RuntimeConfig> = {}): RuntimeConfig {
   return {
-    board: {
-      url: "http://b",
-      id: "b1",
-      queues: { author: ["Todo", "Changes Requested"], reviewer: ["Code Review"] },
-      done: "Done",
-      blocked: ["Need Help"],
-    },
+    boards: [boardConfig],
     hosts: [host("h1"), host("h2")],
     catalog: "/c.json",
     repos: { default: { url: "u", dir: "d" } },
@@ -70,10 +73,10 @@ function board(columns: Column[]): Board {
 }
 
 function memState(): TaskStateStore {
-  const map = new Map<number, { round: number; attempts: number }>();
+  const map = new Map<string, { round: number; attempts: number }>();
   return {
-    get: (id) => map.get(id) ?? { round: 0, attempts: 0 },
-    save: (id, state) => map.set(id, state),
+    get: (boardId, taskId) => map.get(`${boardId}:${taskId}`) ?? { round: 0, attempts: 0 },
+    save: (boardId, taskId, state) => map.set(`${boardId}:${taskId}`, state),
   };
 }
 
@@ -95,10 +98,10 @@ function harness(overrides: Partial<DaemonDeps> = {}): { daemon: FleetDaemon; re
     release: async (candidate) => {
       rec.releases.push(candidate.task.id);
     },
-    moveTo: async (taskId, col) => {
+    moveTo: async (_board, taskId, col) => {
       rec.moves.push({ taskId, column: col });
     },
-    note: async (taskId, note) => {
+    note: async (_board, taskId, note) => {
       rec.notes.push({ taskId, note });
     },
     admit: async () => () => {},
@@ -110,14 +113,14 @@ function harness(overrides: Partial<DaemonDeps> = {}): { daemon: FleetDaemon; re
   return { daemon: new FleetDaemon(deps), rec };
 }
 
-const candidate = (id: number, role: "author" | "reviewer"): Candidate => ({
+const candidate = (id: number, role: "author" | "reviewer", board = boardConfig): Candidate => ({
   task: task({ id }),
   column: column("Todo", []),
   role,
+  board,
 });
 
 test("selects author and reviewer queues, skipping claimed, running and unmet deps", () => {
-  const config = makeConfig();
   const b = board([
     column("Todo", [
       task({ id: 1, priority: "urgent" }), // running -> skipped
@@ -129,7 +132,7 @@ test("selects author and reviewer queues, skipping claimed, running and unmet de
     column("Done", [task({ id: 99 })], 12),
     column("Need Help", [task({ id: 5 })], 13),
   ]);
-  const candidates = selectCandidates(b, config, new Set([1]));
+  const candidates = selectCandidates(b, boardConfig, new Set(["b1:1"]));
   assert.deepEqual(
     candidates.map((entry) => [entry.task.id, entry.role]),
     [
@@ -137,6 +140,24 @@ test("selects author and reviewer queues, skipping claimed, running and unmet de
       [4, "reviewer"],
     ],
   );
+  assert.ok(candidates.every((entry) => entry.board.id === "b1"));
+});
+
+test("selectCandidates distinguishes the same task id on different boards", () => {
+  const other: BoardConfig = { ...boardConfig, id: "b2", url: "http://b2" };
+  const snapshot = (id: string) => ({ ...board([column("Todo", [task({ id: 5 })])]), id });
+  const first = selectCandidates(snapshot("b1"), boardConfig, new Set(["b1:5"]));
+  const second = selectCandidates(snapshot("b2"), other, new Set(["b1:5"]));
+  assert.equal(first.length, 0); // b1:5 is running
+  assert.equal(second.length, 1); // b2:5 is independent
+});
+
+test("container names include the board and fit the 11-char limit", () => {
+  const a = containerName("esayzg", 157, "author");
+  const b = containerName("gczhzo", 157, "author");
+  assert.notEqual(a, b);
+  assert.ok(a.length <= 11 && b.length <= 11);
+  assert.equal(containerName("esayzg", 157, "reviewer"), `${containerName("esayzg", 157, "author").slice(0, -1)}r`);
 });
 
 test("runs a candidate: claims, runs, releases", async () => {
@@ -190,6 +211,18 @@ test("tick starts eligible tasks and respects the concurrency cap", async () => 
   await daemon.tick();
   await daemon.waitIdle();
   assert.equal(rec.claims.length, 1);
+});
+
+test("tick works every board", async () => {
+  const b1: BoardConfig = { ...boardConfig, id: "b1" };
+  const b2: BoardConfig = { ...boardConfig, id: "b2", url: "http://b2" };
+  const { daemon, rec } = harness({
+    config: makeConfig({ boards: [b1, b2] }),
+    snapshot: async (b) => ({ ...board([column("Todo", [task({ id: 7 })])]), id: b.id }),
+  });
+  await daemon.tick();
+  await daemon.waitIdle();
+  assert.equal(rec.claims.length, 2); // task 7 on each board
 });
 
 test("repoForTask picks the repo:<name> tag, else default", () => {
