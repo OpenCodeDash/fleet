@@ -207,8 +207,11 @@ test("repoForTask picks the repo:<name> tag, else default", () => {
 test("branchForTask is deterministic and promptForTask frames the role", () => {
   const t = task({ id: 42, name: "Add hello", description: "make it so" });
   assert.equal(branchForTask(t), "feat/task-42");
-  assert.match(promptForTask(t, "author"), /feat\/task-42/);
-  assert.match(promptForTask(t, "author"), /Clone/);
-  assert.match(promptForTask(t, "reviewer"), /Review/);
-  assert.match(promptForTask(t, "reviewer"), /feat\/task-42/);
+  const repo = "https://github.com/acme/app.git";
+  assert.match(promptForTask(t, "author", repo), /feat\/task-42/);
+  assert.match(promptForTask(t, "author", repo), /Clone/);
+  assert.match(promptForTask(t, "author", repo), new RegExp(repo));
+  assert.match(promptForTask(t, "reviewer", repo), /Review/);
+  assert.match(promptForTask(t, "reviewer", repo), /feat\/task-42/);
+  assert.match(promptForTask(t, "reviewer", repo), new RegExp(repo));
 });

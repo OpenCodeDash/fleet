@@ -57,12 +57,12 @@ export function branchForTask(task: Task): string {
   return `feat/task-${task.id}`;
 }
 
-export function promptForTask(task: Task, role: Role): string {
+export function promptForTask(task: Task, role: Role, repoUrl: string): string {
   const spec = task.description ? `${task.name}\n\n${task.description}` : task.name;
   const branch = branchForTask(task);
   return role === "author"
-    ? `Task: ${spec}\n\nClone the repository, create the branch ${branch}, do the work, commit, and push ${branch} to origin.`
-    : `Task: ${spec}\n\nReview the change on branch ${branch}: clone the repository, check out ${branch}, verify it satisfies the task, and run any tests. If it passes, merge ${branch} into main, push main, and delete the remote branch ${branch}.`;
+    ? `Task: ${spec}\n\nRepository: ${repoUrl}\n\nClone the repository, create the branch ${branch}, do the work, commit, and push ${branch} to origin.`
+    : `Task: ${spec}\n\nRepository: ${repoUrl}\n\nReview the change on branch ${branch}: clone the repository, check out ${branch}, verify it satisfies the task, and run any tests. If it passes, merge ${branch} into main, push main, and delete the remote branch ${branch}.`;
 }
 
 function providerNames(catalog: Catalog): string[] {
@@ -202,7 +202,7 @@ export function createDaemon(
       taskId: String(candidate.task.id),
       repo: repo.url,
       role,
-      prompt: promptForTask(candidate.task, role),
+      prompt: promptForTask(candidate.task, role, repo.url),
       containerId: containerName(candidate.task.id, role),
       ...(role === "reviewer" ? { branch: branchForTask(candidate.task) } : {}),
     };
