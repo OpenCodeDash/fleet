@@ -73,9 +73,13 @@
   # The orchestrator daemon: works every configured board and provisions containers here.
   # Config + secrets live outside the nix store at /etc/fleet/orchestrator.{yaml,env}; state
   # under /var/lib/fleet. See docs/setup.md.
+  #
+  # Deliberately NOT enabled on boot: starting it immediately claims every eligible task on
+  # every configured board. Enable once the boards' repos are mapped (a `repo:<name>` tag or
+  # a sensible `repos.default`):
+  #   systemctl enable --now fleet-orchestrator
   systemd.services.fleet-orchestrator = {
     description = "fleet orchestrator";
-    wantedBy = [ "multi-user.target" ];
     wants = [ "network-online.target" ];
     after = [ "network-online.target" "fleet-egress.service" ];
     serviceConfig = {
