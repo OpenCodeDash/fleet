@@ -93,6 +93,7 @@ function makeHarness(reviewerVerdicts: Array<ReviewerResult["verdict"]>): {
     modulePath: "/etc/nixos/image/fleet-agent.nix",
     port: 4096,
     verifyRetries: 0,
+    columns: { review: "Code Review", changes: "Changes Requested", done: "Done", blocked: "Need Help" },
   };
 
   return { deps, moves, minted, revoked, refs };

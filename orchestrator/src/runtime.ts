@@ -129,6 +129,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     modulePath: options.modulePath,
     port: 4096,
     verifyRetries: options.config.verify.retries,
+    columns: { review: "Code Review", changes: "Changes Requested", done: "Done", blocked: "Need Help" },
     onProgress: options.onProgress,
   };
 

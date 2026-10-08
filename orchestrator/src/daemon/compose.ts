@@ -217,6 +217,15 @@ export function createDaemon(
       modulePath: config.container.modulePath,
       port: config.container.port,
       verifyRetries: 0,
+      columns: {
+        // Derive the role transitions from the board so boards without the standard
+        // columns (e.g. no Code Review) still work.
+        review: candidate.board.queues.reviewer[0] ?? candidate.board.done,
+        changes:
+          candidate.board.queues.author[1] ?? candidate.board.queues.author[0] ?? candidate.board.done,
+        done: candidate.board.done,
+        blocked: candidate.board.blocked[0] ?? candidate.board.done,
+      },
       onProgress: log,
       ...(host.egress === undefined
         ? {}

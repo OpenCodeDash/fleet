@@ -41,6 +41,7 @@
         specialArgs = {
           fleetContainer = self.nixosConfigurations.fleet-agent.config.system.build.toplevel;
           fleetEgressProxy = self.packages.${system}.fleet-egress-proxy;
+          fleetOrchestrator = self.packages.${system}.fleet-orchestrator;
         };
         modules = [ ./host/fleet-host.nix ];
       };
@@ -55,6 +56,26 @@
           runtimeInputs = [ pkgs.nodejs_24 ];
           text = ''
             exec node ${./orchestrator/src/egress}/main.ts
+          '';
+        };
+
+        # The orchestrator daemon (Node + the `yaml` dep), for the fleet-host systemd service.
+        fleet-orchestrator = pkgs.buildNpmPackage {
+          pname = "fleet-orchestrator";
+          version = "0.0.0";
+          src = ./orchestrator;
+          npmDeps = pkgs.importNpmLock { npmRoot = ./orchestrator; };
+          npmConfigHook = pkgs.importNpmLock.npmConfigHook;
+          dontNpmBuild = true;
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+          installPhase = ''
+            runHook preInstall
+            mkdir -p $out/lib
+            cp -r src node_modules package.json $out/lib/
+            makeWrapper ${pkgs.nodejs_24}/bin/node $out/bin/fleet-orchestrator \
+              --add-flags "$out/lib/src/main.ts" \
+              --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.git ]}
+            runHook postInstall
           '';
         };
       };

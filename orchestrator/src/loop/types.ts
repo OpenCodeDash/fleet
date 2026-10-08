@@ -76,6 +76,8 @@ export interface LoopDeps {
   modulePath: string;
   port: number;
   verifyRetries: number;
+  /** Column names this board uses for role transitions (derived from the board config). */
+  columns: { review: string; changes: string; done: string; blocked: string };
   /** Egress proxy wiring; absent → the container is left without network policy. */
   egress?: {
     /** Proxy URL injected into the container's HTTP(S) clients. */

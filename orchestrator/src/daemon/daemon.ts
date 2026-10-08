@@ -140,7 +140,7 @@ export class FleetDaemon {
     await this.deps.moveTo(
       candidate.board,
       candidate.task.id,
-      candidate.board.blocked[0] ?? "Need Help",
+      candidate.board.blocked[0] ?? candidate.board.done,
     );
   }
 

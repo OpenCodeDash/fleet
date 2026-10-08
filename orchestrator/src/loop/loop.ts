@@ -170,7 +170,7 @@ export class TaskLoop {
             `verified ${result.branch}@${result.head_sha.slice(0, 8)}; moving task ${attempt.taskId} to Code Review`,
           );
           await this.deps.board.appendNote(attempt.taskId, result.summary);
-          await this.deps.board.moveTo(attempt.taskId, "Code Review");
+          await this.deps.board.moveTo(attempt.taskId, this.deps.columns.review);
           return { status: "completed", action: "code-review" };
         }
         lastReason = check.reason;
@@ -207,7 +207,7 @@ export class TaskLoop {
         `review: changes requested; moving task ${attempt.taskId} to Changes Requested`,
       );
       await this.deps.board.appendNote(attempt.taskId, result.note);
-      await this.deps.board.moveTo(attempt.taskId, "Changes Requested");
+      await this.deps.board.moveTo(attempt.taskId, this.deps.columns.changes);
       return { status: "completed", action: "changes-requested" };
     }
     const check = await this.verifyReviewer(attempt, result);
@@ -216,8 +216,8 @@ export class TaskLoop {
       await sink.record({ source: "lifecycle", type: "verify-failed", data: check.reason });
       return { status: "failed", reason: check.reason, escalate: false };
     }
-    this.progress(`review: approved; moving task ${attempt.taskId} to Done`);
-    await this.deps.board.moveTo(attempt.taskId, "Done");
+    this.progress(`review: approved; moving task ${attempt.taskId} to ${this.deps.columns.done}`);
+    await this.deps.board.moveTo(attempt.taskId, this.deps.columns.done);
     return { status: "completed", action: "done" };
   }
 

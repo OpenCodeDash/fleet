@@ -111,6 +111,7 @@ function harness(options: HarnessOptions = {}): {
     modulePath: "/etc/nixos/image/fleet-agent.nix",
     port: 4096,
     verifyRetries: options.verifyRetries ?? 0,
+    columns: { review: "Code Review", changes: "Changes Requested", done: "Done", blocked: "Need Help" },
     onProgress: (message) => {
       progress.push(message);
     },

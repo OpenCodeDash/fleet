@@ -5,7 +5,7 @@
 # minting, the board, the egress proxy's policy — lives elsewhere; see docs/architecture.md.
 #
 # `nix build .#fleet-host-vm` runs this host in QEMU for local development.
-{ pkgs, fleetContainer, fleetEgressProxy, ... }:
+{ pkgs, fleetContainer, fleetEgressProxy, fleetOrchestrator, ... }:
 {
   system.stateVersion = "25.11";
   networking.hostName = "fleet-host";
@@ -67,6 +67,23 @@
       FLEET_EGRESS_PORT = "3128";
       FLEET_EGRESS_ADMIN_PORT = "3129";
       FLEET_EGRESS_ALLOW = "";
+    };
+  };
+
+  # The orchestrator daemon: works every configured board and provisions containers here.
+  # Config + secrets live outside the nix store at /etc/fleet/orchestrator.{yaml,env}; state
+  # under /var/lib/fleet. See docs/setup.md.
+  systemd.services.fleet-orchestrator = {
+    description = "fleet orchestrator";
+    wantedBy = [ "multi-user.target" ];
+    wants = [ "network-online.target" ];
+    after = [ "network-online.target" "fleet-egress.service" ];
+    serviceConfig = {
+      ExecStart = "${fleetOrchestrator}/bin/fleet-orchestrator run";
+      EnvironmentFile = "/etc/fleet/orchestrator.env";
+      Restart = "on-failure";
+      RestartSec = 5;
+      StateDirectory = "fleet";
     };
   };
 }
