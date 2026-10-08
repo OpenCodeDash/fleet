@@ -63,6 +63,9 @@ export class EgressProxy {
   }
 
   private handleRequest(req: IncomingMessage, res: ServerResponse): void {
+    // A client that resets mid-request must not crash the proxy.
+    req.on("error", () => {});
+    res.on("error", () => {});
     let target: URL;
     try {
       target = new URL(req.url ?? "");
@@ -97,6 +100,9 @@ export class EgressProxy {
   private handleConnect(req: IncomingMessage, clientSocket: Duplex, head: Buffer): void {
     const authority = req.url ?? "";
     if (!this.decide(authority, "CONNECT", clientOf(req))) {
+      // A denied CONNECT is often followed by the client resetting the socket; swallow the
+      // resulting ECONNRESET so one blocked tunnel can't take the whole proxy down.
+      clientSocket.on("error", () => {});
       clientSocket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
       return;
     }
@@ -107,7 +113,9 @@ export class EgressProxy {
       upstream.pipe(clientSocket);
       clientSocket.pipe(upstream);
     });
+    // Either side erroring tears down the other; both handlers keep errors off the event loop.
     upstream.on("error", () => clientSocket.destroy());
+    clientSocket.on("error", () => upstream.destroy());
   }
 
   /** Start listening; resolves with the actual bound port (0 → ephemeral). */

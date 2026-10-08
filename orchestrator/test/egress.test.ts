@@ -132,6 +132,31 @@ test("denies a non-allowlisted CONNECT tunnel", async () => {
   }
 });
 
+test("survives a client reset on a denied CONNECT (does not crash)", async () => {
+  const origin = createServer((_req, res) => {
+    res.writeHead(200).end("ok");
+  });
+  const originPort = await listen(origin);
+  const proxy = new EgressProxy({ allowlist: ["127.0.0.1"] });
+  const proxyPort = await proxy.listen();
+  try {
+    await new Promise<void>((resolve) => {
+      const socket = netConnect(proxyPort, "127.0.0.1", () => {
+        socket.write("CONNECT blocked.example:443 HTTP/1.1\r\nHost: blocked.example\r\n\r\n");
+        socket.resetAndDestroy();
+        resolve();
+      });
+      socket.on("error", () => resolve());
+    });
+    // The proxy must still be alive and serving.
+    const ok = await proxyRequest(proxyPort, `http://127.0.0.1:${originPort}/x`);
+    assert.equal(ok.status, 200);
+  } finally {
+    await proxy.close();
+    origin.close();
+  }
+});
+
 test("isAllowed consults the whole list", () => {
   assert.equal(isAllowed("api.github.com", ["*.example.com", "api.github.com"]), true);
   assert.equal(isAllowed("nope.dev", ["*.example.com", "api.github.com"]), false);
