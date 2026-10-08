@@ -217,7 +217,13 @@ export function createDaemon(
       await board.claim(config.board.id, candidate.column.id, candidate.task.id, "fleet-daemon");
     },
     release: async (candidate) => {
-      await board.release(config.board.id, candidate.column.id, candidate.task.id);
+      // The attempt may have moved the task to another column (e.g. Code Review), so release
+      // it where it currently sits, not where it was claimed.
+      const snapshot = await board.getBoard(config.board.id);
+      const found = findTask(snapshot, candidate.task.id);
+      if (found !== undefined) {
+        await board.release(config.board.id, found.column.id, candidate.task.id);
+      }
     },
     moveTo: (taskId, columnName) => boardPort.moveTo(String(taskId), columnName),
     note: (taskId, note) => boardPort.appendNote(String(taskId), note),
