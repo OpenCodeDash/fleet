@@ -85,6 +85,8 @@
     serviceConfig = {
       ExecStart = "${fleetOrchestrator}/bin/fleet-orchestrator run";
       EnvironmentFile = "/etc/fleet/orchestrator.env";
+      # nixos-container (and git/systemd-nspawn/ip) live in the system profile.
+      Environment = [ "PATH=/run/current-system/sw/bin:/run/wrappers/bin:/usr/bin:/bin" ];
       Restart = "on-failure";
       RestartSec = 5;
       StateDirectory = "fleet";
