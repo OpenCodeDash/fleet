@@ -188,7 +188,8 @@ function parseRepos(raw: Raw): Record<string, RepoConfig> {
     if (!isObject(entry)) fail(`repos.${tag}`, "expected a mapping");
     repos[tag] = {
       url: requiredString(entry, "url", `repos.${tag}`),
-      dir: requiredString(entry, "dir", `repos.${tag}`),
+      // Optional local clone dir; the verifier lazily clones under /var/lib/fleet/repos when absent.
+      dir: optionalString(entry, "dir") ?? "",
     };
   }
   return repos;

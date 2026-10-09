@@ -42,17 +42,28 @@ export interface DaemonHandle {
   close(): void;
 }
 
-/** The repo a task targets: a `repo:<name>` tag, else the default. */
+/**
+ * The repo a task targets: a `repo:<name>` tag, a bare tag naming a repo/codebase (e.g.
+ * `dash`), else the default.
+ */
 export function repoForTask(task: Task, config: RuntimeConfig): RepoConfig {
   for (const tag of task.tags) {
     if (tag.name.startsWith("repo:")) {
       const repo = config.repos[tag.name.slice("repo:".length)];
       if (repo !== undefined) return repo;
+    } else if (config.repos[tag.name] !== undefined) {
+      return config.repos[tag.name] as RepoConfig;
     }
   }
   const fallback = config.repos.default ?? Object.values(config.repos)[0];
   if (fallback === undefined) throw new Error("no repo configured");
   return fallback;
+}
+
+/** A filesystem-safe slug for a repo URL (last path segment sans `.git`). */
+export function repoSlug(url: string): string {
+  const last = url.replace(/\/+$/, "").split("/").pop() ?? "repo";
+  return last.replace(/\.git$/, "").replace(/[^A-Za-z0-9._-]/g, "_") || "repo";
 }
 
 /** Deterministic branch per task so the reviewer knows what to check out. */
@@ -195,7 +206,8 @@ export function createDaemon(
     const role = candidate.role;
     const git = new CommandGitVerifier({
       remote: repo.url,
-      ...(repo.dir.length === 0 ? {} : { repoDir: repo.dir }),
+      // A local clone (for the reviewer's ancestry check) is lazily created on demand.
+      repoDir: repo.dir.length > 0 ? repo.dir : `/var/lib/fleet/repos/${repoSlug(repo.url)}`,
       runner: new NodeExecutor(),
       // Private repos: verify with the same token the container pushes with.
       ...(env.FLEET_GITHUB_TOKEN === undefined ? {} : { token: env.FLEET_GITHUB_TOKEN }),

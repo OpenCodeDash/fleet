@@ -242,6 +242,12 @@ test("repoForTask picks the repo:<name> tag, else default", () => {
     tags: [{ id: 1, name: "repo:acme", description: null, prompt: null, color: null }],
   });
   assert.equal(repoForTask(tagged, config).url, "a");
+  // A bare tag naming a repo/codebase also maps.
+  const bare = task({
+    id: 1,
+    tags: [{ id: 1, name: "acme", description: null, prompt: null, color: null }],
+  });
+  assert.equal(repoForTask(bare, config).url, "a");
 });
 
 test("branchForTask is deterministic and promptForTask frames the role", () => {
