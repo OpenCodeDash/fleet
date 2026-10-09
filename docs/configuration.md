@@ -41,10 +41,14 @@ boards:
     token: ${env:KANBAN_TOKEN}
 ```
 
-Each board defines its own queues/`done`/`blocked` columns. A single `board: {...}` is
-accepted as sugar for a one-element `boards:`. Task ids are only unique **per board**, so the
-daemon keys its state and names containers by `boardId:taskId` — a container for board `x`
-task `5` is distinct from board `y` task `5` on the same host.
+Each board defines its own queues/`inProgress`/`done`/`blocked` columns. A task claimed from
+an author queue is moved to `inProgress` (default `In Progress`; set it to `""` to leave tasks
+in place) while the attempt runs, then to the review/`done`/`blocked` column on the outcome.
+Point `queues.author` at a dedicated trigger column (e.g. `Agent Todo`) and dragging a task
+into it starts an agent. A single `board: {...}` is accepted as sugar for a one-element
+`boards:`. Task ids are only unique **per board**, so the daemon keys its state and names
+containers by `boardId:taskId` — a container for board `x` task `5` is distinct from board `y`
+task `5` on the same host.
 
 ## Tunables
 

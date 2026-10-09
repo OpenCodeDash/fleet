@@ -2,6 +2,8 @@
 # Secrets use ${env:NAME} and are read from the environment (never stored here).
 
 # One or more boards; each defines its own queues/columns. A single `board: {...}` also works.
+# Tip: point `queues.author` at a dedicated trigger column (e.g. `Agent Todo`) so a human drags
+# a task into it to start an agent; the claimed task then moves to `inProgress` while it runs.
 boards:
   - url: http://192.168.68.51:3000
     id: esayzg
@@ -9,6 +11,7 @@ boards:
     queues:
       author: [Todo, Changes Requested]
       reviewer: [Code Review]
+    inProgress: In Progress
     done: Done
     blocked: [Need Help]
 

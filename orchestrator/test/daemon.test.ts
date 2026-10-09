@@ -23,6 +23,7 @@ const boardConfig: BoardConfig = {
   url: "http://b",
   id: "b1",
   queues: { author: ["Todo", "Changes Requested"], reviewer: ["Code Review"] },
+  inProgress: "In Progress",
   done: "Done",
   blocked: ["Need Help"],
 };
@@ -165,7 +166,7 @@ test("runs a candidate: claims, runs, releases", async () => {
   await daemon.runCandidate(candidate(1, "author"), host("h1"));
   assert.deepEqual(rec.claims, [1]);
   assert.deepEqual(rec.releases, [1]);
-  assert.deepEqual(rec.moves, []);
+  assert.deepEqual(rec.moves, [{ taskId: 1, column: "In Progress" }]);
 });
 
 test("failed attempts requeue, then escalate to the blocked column", async () => {
@@ -178,8 +179,11 @@ test("failed attempts requeue, then escalate to the blocked column", async () =>
   assert.deepEqual(
     rec.moves,
     [
+      { taskId: 1, column: "In Progress" },
       { taskId: 1, column: "Todo" },
+      { taskId: 1, column: "In Progress" },
       { taskId: 1, column: "Todo" },
+      { taskId: 1, column: "In Progress" },
       { taskId: 1, column: "Need Help" },
     ],
   );
@@ -190,7 +194,10 @@ test("an escalating failure goes straight to the blocked column", async () => {
     runAttempt: async (): Promise<AttemptOutcome> => ({ status: "failed", reason: "capability", escalate: true }),
   });
   await daemon.runCandidate(candidate(1, "author"), host("h1"));
-  assert.deepEqual(rec.moves, [{ taskId: 1, column: "Need Help" }]);
+  assert.deepEqual(rec.moves, [
+    { taskId: 1, column: "In Progress" },
+    { taskId: 1, column: "Need Help" },
+  ]);
 });
 
 test("review rounds are bounded by review.maxRounds", async () => {

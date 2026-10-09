@@ -45,6 +45,8 @@ export interface BoardConfig {
   id: string;
   token?: string;
   queues: { author: string[]; reviewer: string[] };
+  /** Column a claimed author task moves to while an attempt runs (empty to leave in place). */
+  inProgress: string;
   done: string;
   blocked: string[];
 }
@@ -203,6 +205,7 @@ function parseBoard(raw: Raw, path: string): BoardConfig {
       author: stringList(queues, "author", `${path}.queues`, ["Todo", "Changes Requested"]),
       reviewer: stringList(queues, "reviewer", `${path}.queues`, ["Code Review"]),
     },
+    inProgress: optionalString(raw, "inProgress") ?? "In Progress",
     done: optionalString(raw, "done") ?? "Done",
     blocked: stringList(raw, "blocked", path, ["Need Help"]),
   };

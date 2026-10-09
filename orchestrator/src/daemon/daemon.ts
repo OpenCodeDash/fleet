@@ -87,6 +87,10 @@ export class FleetDaemon {
     try {
       if (this.stopped) return;
       await this.deps.claim(candidate);
+      // Drain the trigger column: an author task moves into In Progress while it runs.
+      if (candidate.role === "author" && candidate.board.inProgress.length > 0) {
+        await this.deps.moveTo(candidate.board, candidate.task.id, candidate.board.inProgress);
+      }
       this.deps.log(`claim ${label} (${candidate.role}) on ${host.name}`);
       const outcome = await this.deps.runAttempt(candidate, host);
       await this.settle(candidate, outcome);
