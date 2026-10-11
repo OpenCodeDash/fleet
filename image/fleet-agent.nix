@@ -12,9 +12,10 @@
   # It is a container, not a bootable machine: no bootloader, no root fs.
   boot.isContainer = true;
 
-  # Disposable worker: keep the closure lean and skip docs/desktop.
+  # Disposable worker: keep the closure lean and skip docs/desktop. Node/npm so JS/TS tasks
+  # can install deps and build.
   documentation.enable = false;
-  environment.systemPackages = [ pkgs.opencode pkgs.git ];
+  environment.systemPackages = [ pkgs.opencode pkgs.git pkgs.nodejs_24 ];
 
   # Agents push over HTTPS with a token injected at runtime as GITHUB_TOKEN; the helper reads
   # it from the environment, so the token is never baked into the image or the config.
@@ -45,6 +46,9 @@
         "OPENCODE_DISABLE_PRUNE=1"
         # Capability config + agents live here, mounted read-only at provision time.
         "OPENCODE_CONFIG_DIR=/etc/fleet/opencode"
+        # The agent's bash tool inherits this; without the system profile git/sh/node aren't
+        # on PATH (systemd gives services a minimal one).
+        "PATH=/run/current-system/sw/bin:/run/wrappers/bin:/bin:/usr/bin"
       ];
     };
   };
