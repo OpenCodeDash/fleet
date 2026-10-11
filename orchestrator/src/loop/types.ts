@@ -28,6 +28,8 @@ export interface AgentRunInput {
   prompt: string;
   sessionTitle: string;
   sink: EventSink;
+  /** Aborted to cancel the turn (e.g. on daemon shutdown). */
+  signal?: AbortSignal;
 }
 
 export interface GitVerifier {
@@ -78,6 +80,8 @@ export interface LoopDeps {
   verifyRetries: number;
   /** Column names this board uses for role transitions (derived from the board config). */
   columns: { review: string; changes: string; done: string; blocked: string };
+  /** Aborted to cancel an in-flight attempt (e.g. on daemon shutdown). */
+  signal?: AbortSignal;
   /** Egress proxy wiring; absent → the container is left without network policy. */
   egress?: {
     /** Proxy URL injected into the container's HTTP(S) clients. */

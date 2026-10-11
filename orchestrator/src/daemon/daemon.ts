@@ -24,6 +24,7 @@ interface RunningEntry {
 export class FleetDaemon {
   private readonly deps: DaemonDeps;
   private readonly running = new Map<string, RunningEntry>();
+  private readonly aborts = new Map<string, AbortController>();
   private readonly tasks = new Set<Promise<void>>();
   private stopped = false;
 
@@ -42,6 +43,8 @@ export class FleetDaemon {
 
   stop(): void {
     this.stopped = true;
+    // Abort in-flight turns so shutdown doesn't wait out the whole agent turn.
+    for (const controller of this.aborts.values()) controller.abort();
   }
 
   /** Resolve once every in-flight attempt has settled (for shutdown / tests). */
@@ -83,7 +86,10 @@ export class FleetDaemon {
 
   private async execute(candidate: Candidate, host: HostConfig): Promise<void> {
     const label = `${candidate.board.id}#${candidate.task.id}`;
+    const key = taskKey(candidate.board.id, candidate.task.id);
     const release: Release = await this.deps.admit({});
+    const controller = new AbortController();
+    this.aborts.set(key, controller);
     try {
       if (this.stopped) return;
       await this.deps.claim(candidate);
@@ -92,24 +98,32 @@ export class FleetDaemon {
         await this.deps.moveTo(candidate.board, candidate.task.id, candidate.board.inProgress);
       }
       this.deps.log(`claim ${label} (${candidate.role}) on ${host.name}`);
-      const outcome = await this.deps.runAttempt(candidate, host);
+      const outcome = await this.deps.runAttempt(candidate, host, controller.signal);
       await this.settle(candidate, outcome);
     } catch (error) {
       this.deps.log(`${label} error: ${error instanceof Error ? error.message : String(error)}`);
-      await this.escalate(candidate, "internal error");
+      if (!this.stopped) await this.escalate(candidate, "internal error");
     } finally {
+      this.aborts.delete(key);
       try {
         await this.deps.release(candidate);
       } catch {
         // best-effort
       }
-      this.running.delete(taskKey(candidate.board.id, candidate.task.id));
+      this.running.delete(key);
       release();
     }
   }
 
   private async settle(candidate: Candidate, outcome: AttemptOutcome): Promise<void> {
     const { board, task } = candidate;
+    if (this.stopped) {
+      // Shutting down: put an interrupted attempt back in its queue without consuming one.
+      if (outcome.status === "failed") {
+        await this.deps.moveTo(board, task.id, this.requeueColumn(board, candidate.role));
+      }
+      return;
+    }
     if (outcome.status === "completed") {
       // The TaskLoop already moved the board. Only the review-round bound is ours to track.
       if (outcome.action === "changes-requested") {

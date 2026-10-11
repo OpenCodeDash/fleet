@@ -275,6 +275,7 @@ export class OpencodeAgentRunner {
 
     // Stream the container's events while the turn runs (best-effort, for live output).
     const abort = new AbortController();
+    input.signal?.addEventListener("abort", () => abort.abort(), { once: true });
     void this.streamEvents(input.address, abort.signal);
     const timer = setTimeout(() => abort.abort(), this.turnTimeoutMs);
     try {
@@ -295,6 +296,7 @@ export class OpencodeAgentRunner {
         : { kind: "reviewer", result: parseReviewerResult(structured) };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
+        if (input.signal?.aborted === true) throw new AgentError("agent turn aborted");
         throw new AgentError(`agent turn exceeded ${this.turnTimeoutMs}ms`);
       }
       throw error;

@@ -159,6 +159,7 @@ export class TaskLoop {
         prompt,
         sessionTitle: attempt.taskId,
         sink,
+        ...(this.deps.signal === undefined ? {} : { signal: this.deps.signal }),
       });
       const result = completion.kind === "author" ? completion.result : null;
       if (result === null) {
@@ -197,6 +198,7 @@ export class TaskLoop {
       prompt: attempt.prompt,
       sessionTitle: attempt.taskId,
       sink,
+      ...(this.deps.signal === undefined ? {} : { signal: this.deps.signal }),
     });
     const result = completion.kind === "reviewer" ? completion.result : null;
     if (result === null) {

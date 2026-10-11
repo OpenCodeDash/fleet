@@ -199,7 +199,11 @@ export function createDaemon(
     );
   }
 
-  const runAttempt = async (candidate: Candidate, host: HostConfig): Promise<AttemptOutcome> => {
+  const runAttempt = async (
+    candidate: Candidate,
+    host: HostConfig,
+    signal?: AbortSignal,
+  ): Promise<AttemptOutcome> => {
     const provisioner = provisioners.get(host.name);
     if (provisioner === undefined) throw new Error(`unknown host ${host.name}`);
     const repo = repoForTask(candidate.task, config);
@@ -238,6 +242,7 @@ export function createDaemon(
         done: candidate.board.done,
         blocked: candidate.board.blocked[0] ?? candidate.board.done,
       },
+      ...(signal === undefined ? {} : { signal }),
       onProgress: log,
       ...(host.egress === undefined
         ? {}

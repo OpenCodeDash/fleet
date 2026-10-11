@@ -39,7 +39,11 @@ export interface DaemonDeps {
   /** Fleet-wide admission control (see docs/limiters.md). */
   admit(input: { provider?: string; mcp?: string }): Promise<Release>;
   /** Run one attempt on a host (wires the TaskLoop + that host's provisioner). */
-  runAttempt(candidate: Candidate, host: HostConfig): Promise<AttemptOutcome>;
+  runAttempt(
+    candidate: Candidate,
+    host: HostConfig,
+    signal?: AbortSignal,
+  ): Promise<AttemptOutcome>;
   state: TaskStateStore;
   log(message: string): void;
 }

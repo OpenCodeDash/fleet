@@ -210,6 +210,28 @@ test("review rounds are bounded by review.maxRounds", async () => {
   assert.ok(rec.notes.some((entry) => /round 1\/2/.test(entry.note)));
 });
 
+test("stop aborts in-flight attempts and requeues without consuming an attempt", async () => {
+  let seen: AbortSignal | undefined;
+  const { daemon, rec } = harness({
+    runAttempt: async (_candidate, _host, signal) => {
+      seen = signal;
+      await new Promise<void>((resolve) =>
+        signal?.addEventListener("abort", () => resolve(), { once: true }),
+      );
+      return { status: "failed", reason: "agent turn aborted", escalate: false };
+    },
+  });
+  const inFlight = daemon.runCandidate(candidate(1, "author"), host("h1"));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  daemon.stop();
+  await inFlight;
+  assert.equal(seen?.aborted, true);
+  assert.deepEqual(rec.moves, [
+    { taskId: 1, column: "In Progress" },
+    { taskId: 1, column: "Todo" },
+  ]);
+});
+
 test("tick starts eligible tasks and respects the concurrency cap", async () => {
   const { daemon, rec } = harness({
     config: makeConfig({ limits: { maxContainers: 1, providerConcurrency: 4, mcpConcurrency: 5 } }),
